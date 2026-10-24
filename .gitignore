@@ -1,0 +1,87 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+bun-debug.log*
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build / Vite
+dist
+dist-ssr
+build
+.vite
+*.local
+*.tsbuildinfo
+
+# Env & secrets (never commit)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Test / coverage
+coverage
+*.lcov
+.nyc_output
+playwright-report
+test-results
+blob-report
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+
+# Capacitor / native local
+.capacitor
+*.keystore
+*.jks
+keystore.properties
+**/local.properties
+
+# Apple / signing / push secrets
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+AuthKey_*.p8
+GoogleService-Info.plist.local
+
+# Firebase / Google (keep committed copies only if intentional; prefer examples)
+# Uncomment if these should stay private:
+# **/google-services.json
+# **/GoogleService-Info.plist
+
+# Supabase CLI local
+supabase/.branches
+supabase/.temp
+
+# Misc tooling
+.turbo
+.cache
+*.pem
+*.key
+credentials.json
+service-account*.json
+firebase-adminsdk*.json
+
+# Cursor / agent (optional local)
+.cursor/plans
+.cursor/*.log

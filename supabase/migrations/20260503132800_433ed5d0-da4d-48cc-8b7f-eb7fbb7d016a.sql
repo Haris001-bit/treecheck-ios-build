@@ -1,0 +1,1 @@
+DELETE FROM leads WHERE id = '881fad90-a927-4d9a-9cc5-413199b1cbe7';

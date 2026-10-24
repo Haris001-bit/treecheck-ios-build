@@ -1,0 +1,1 @@
+UPDATE public.profiles SET dma_beta_enabled = true WHERE email IN ('markjcafiero@gmail.com', 'mark@tradesmarketing.ai');

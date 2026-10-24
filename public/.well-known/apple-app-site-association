@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "SA37R72G8P.com.treecheck.app",
+        "paths": [
+          "NOT /dashboard/pulse/setup*",
+          "NOT /dashboard/pulse/oauth-return*",
+          "*"
+        ]
+      }
+    ]
+  }
+}

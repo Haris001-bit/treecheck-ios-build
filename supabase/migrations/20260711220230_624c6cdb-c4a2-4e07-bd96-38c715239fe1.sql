@@ -1,0 +1,7 @@
+
+ALTER TABLE public.product_entitlements DROP CONSTRAINT IF EXISTS product_entitlements_product_check;
+ALTER TABLE public.product_entitlements
+  ADD CONSTRAINT product_entitlements_product_check
+  CHECK (product = ANY (ARRAY[
+    'scout','dma','dma_basic_demo','dma_web','google_reviews','lsa','leads','team_seats'
+  ]));

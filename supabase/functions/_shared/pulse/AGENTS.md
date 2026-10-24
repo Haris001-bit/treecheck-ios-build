@@ -1,0 +1,2 @@
+- New Financial Pulse figures and charts take their numbers from pulse-get (worked out in engine.ts here), never from bank rows added up in the browser, because every Pulse screen must show the same numbers.
+- After changing engine.ts or sorter.ts, raise ENGINE_VERSION or SORTER_VERSION in that file and deploy every function that imports it, because saved Pulse numbers are only worked out again when the version changes.

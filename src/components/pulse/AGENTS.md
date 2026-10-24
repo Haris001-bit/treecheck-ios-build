@@ -1,0 +1,4 @@
+- Pulse screens use the colours in tone.ts (GOOD_TEXT green, BAD_TEXT red), because every Pulse screen must match the app's theme.
+- Home.tsx only places Pulse components (home/PulseHomeCard, home/PulseWelcomeSummary) and never reads Pulse data. Home and Pulse share one daily chart from engine-generated calendar windows passed to pulse-get's window-totals calculation, because counting, refunds, tax and timezone must match without browser aggregation.
+- The Welcome back Pulse summary (home/pulseMonthWords.ts) is written by fixed rules, never by AI; the AI summary (home-summary function) uses only job, quote and Scout records, because Plaid forbids sending bank data to AI.
+- PlaidLinkButton asks for two-step sign-in (useTwoStep in TwoStepDialog.tsx) before every link token, and src/lib/auth.tsx keeps the role on MFA_CHALLENGE_VERIFIED, because the server refuses Plaid Link without it and a role reload would close the page mid-step.

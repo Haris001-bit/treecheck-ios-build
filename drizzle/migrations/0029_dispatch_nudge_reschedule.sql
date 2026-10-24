@@ -1,0 +1,1 @@
+ALTER TABLE public.job_dispatches ADD COLUMN IF NOT EXISTS last_nudged_at timestamptz, ADD COLUMN IF NOT EXISTS rescheduled_at timestamptz;

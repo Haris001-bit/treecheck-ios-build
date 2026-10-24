@@ -1,0 +1,1 @@
+ALTER TABLE public.contractor_engagement ADD COLUMN IF NOT EXISTS winback_60d_sent_at timestamp with time zone DEFAULT NULL;

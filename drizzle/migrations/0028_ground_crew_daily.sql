@@ -1,0 +1,1 @@
+ALTER TABLE public.job_dispatches ADD COLUMN IF NOT EXISTS last_daily_reminder_at timestamptz, ADD COLUMN IF NOT EXISTS more_dates_requested_at timestamptz, ADD COLUMN IF NOT EXISTS more_dates_requested_for text;

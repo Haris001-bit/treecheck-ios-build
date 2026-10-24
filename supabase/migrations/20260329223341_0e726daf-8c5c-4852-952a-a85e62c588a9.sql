@@ -1,0 +1,1 @@
+UPDATE leads SET photo_url = 'lead-photos/edmond-tree-pergola.png' WHERE id = '19e04104-5e10-4e85-b9ec-bc1f5ca155f7';

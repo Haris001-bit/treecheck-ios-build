@@ -1,0 +1,2 @@
+ALTER TABLE public.crew_members ADD COLUMN IF NOT EXISTS mini_skid_experience boolean NOT NULL DEFAULT false;
+COMMENT ON COLUMN public.crew_members.mini_skid_experience IS 'Self-reported: experienced running a mini (walk-behind) skid steer. Informational, not a gate.';

@@ -1,0 +1,1 @@
+ALTER TABLE public.dma_integrations ADD COLUMN IF NOT EXISTS brand_voice TEXT;

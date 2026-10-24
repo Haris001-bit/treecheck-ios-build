@@ -1,0 +1,1 @@
+UPDATE public.leads SET is_sample = false WHERE city NOT IN ('Austin', 'Dallas');

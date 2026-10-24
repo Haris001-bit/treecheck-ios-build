@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Integration Guide: Send Lead to TreeCheck App</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 820px; margin: 0 auto; padding: 40px 24px; background: #fafafa; }
+    h1 { font-size: 28px; margin-bottom: 8px; color: #111; }
+    h2 { font-size: 20px; margin: 32px 0 12px; color: #222; border-bottom: 2px solid #e5e5e5; padding-bottom: 6px; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #333; }
+    p { margin-bottom: 12px; color: #444; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 8px; overflow-x: auto; margin: 12px 0 20px; font-size: 13px; line-height: 1.5; }
+    pre code { background: none; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; background: #fff; }
+    th, td { text-align: left; padding: 10px 14px; border: 1px solid #ddd; font-size: 14px; vertical-align: top; }
+    th { background: #f5f5f5; font-weight: 600; }
+    td code { font-size: 13px; }
+    .badge { display: inline-block; background: #16a34a; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+    .warn { background: #f59e0b; }
+    .flow-box { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 20px; margin: 16px 0; }
+    .flow-box code { background: #eef6ff; color: #1d4ed8; }
+    .step { display: flex; align-items: flex-start; gap: 12px; margin: 10px 0; }
+    .step-num { background: #111; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; margin-top: 2px; }
+    .subtitle { color: #666; font-size: 16px; margin-bottom: 24px; }
+    .security-note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+    .info-note { background: #dbeafe; border-left: 4px solid #2563eb; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+    .req { color: #dc2626; font-weight: 600; }
+    .opt { color: #6b7280; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <h1>n8n Integration Guide</h1>
+  <p class="subtitle">Send a Lead to the TreeCheck Contractor App</p>
+
+  <h2>Overview</h2>
+  <p>Homeowners submit the tree estimate form on the WordPress site (<code>treecheck.ai</code>). The form fires a webhook into n8n, where GPT generates an estimate and emails the homeowner. After that step, n8n must <strong>POST the lead into the TreeCheck contractor app</strong> so local arborists can unlock and contact the customer.</p>
+
+  <div class="flow-box" style="text-align:center; font-size: 15px;">
+    <strong>WordPress Form</strong> → <strong>n8n Webhook</strong> → <strong>GPT Estimate</strong> → <strong>Homeowner Email</strong> + <strong>POST to <code>create-lead</code></strong> (this guide)
+  </div>
+
+  <h2>Endpoint</h2>
+  <pre><code>POST https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-lead</code></pre>
+
+  <h2>Headers</h2>
+  <table>
+    <tr><th>Header</th><th>Value</th></tr>
+    <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+    <tr><td><code>x-webhook-secret</code></td><td><code>5jhj47_C_P5_H5i</code></td></tr>
+  </table>
+
+  <div class="security-note">
+    ⚠️ <strong>Keep the webhook secret secure.</strong> Do not share it publicly or commit it to version control. If the secret is missing or wrong, the request returns <code>401 Unauthorized</code>.
+  </div>
+
+  <h2>Request Body</h2>
+  <pre><code>{
+  "photo_url": "https://example.com/uploads/tree-photo.jpg",
+  "city": "Oklahoma City",
+  "customer_name": "Jane Doe",
+  "customer_email": "jane@example.com",
+  "customer_phone": "+14055551234",
+  "customer_address": "123 Main St, Oklahoma City, OK 73102",
+  "estimated_cost_min": 850,
+  "estimated_cost_max": 1400,
+  "job_type": "Tree Removal",
+  "urgency": "As soon as possible"
+}</code></pre>
+
+  <h3>Field Reference</h3>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Required</th><th>Description / Rules</th></tr>
+    <tr><td><code>photo_url</code></td><td>string (URL)</td><td><span class="req">Yes</span></td><td>Public URL to the tree photo. Must be <code>http://</code> or <code>https://</code>. Max 2048 chars. The app auto-downloads it into our private storage so the link can later go dead without breaking the lead.</td></tr>
+    <tr><td><code>city</code></td><td>string</td><td><span class="req">Yes</span></td><td>City name only — e.g. <code>"Oklahoma City"</code>, <code>"Edmond"</code>, <code>"Austin"</code>. Used to match contractors by service area. Max 200 chars.</td></tr>
+    <tr><td><code>customer_name</code></td><td>string</td><td><span class="req">Yes</span></td><td>Full name from the form. Max 200 chars.</td></tr>
+    <tr><td><code>customer_email</code></td><td>string</td><td><span class="req">Yes</span></td><td>Must be a valid email. Max 320 chars.</td></tr>
+    <tr><td><code>customer_phone</code></td><td>string</td><td><span class="req">Yes</span></td><td>E.164 (e.g. <code>+14055551234</code>) or US format (e.g. <code>(405) 555-1234</code>). Max 50 chars.</td></tr>
+    <tr><td><code>customer_address</code></td><td>string</td><td><span class="req">Yes</span></td><td>Full street address — contractors click this to open Google Maps. Max 500 chars.</td></tr>
+    <tr><td><code>estimated_cost_min</code></td><td>number</td><td><span class="req">Yes</span></td><td>Low end of the GPT estimate, in dollars. Must be ≥ 0.</td></tr>
+    <tr><td><code>estimated_cost_max</code></td><td>number</td><td><span class="req">Yes</span></td><td>High end of the GPT estimate, in dollars. Must be ≥ <code>estimated_cost_min</code> and ≤ 1,000,000.</td></tr>
+    <tr><td><code>job_type</code></td><td>string (enum)</td><td><span class="req">Yes</span></td><td>Must be one of: <code>"Tree Removal"</code>, <code>"Stump Grinding"</code>, <code>"Pruning/Trimming"</code>. Common aliases like <code>"trimming"</code> or <code>"removal"</code> are auto-normalized, but please send the canonical value when possible.</td></tr>
+    <tr><td><code>urgency</code></td><td>string (enum)</td><td><span class="opt">No</span></td><td>One of: <code>"Emergency"</code>, <code>"As soon as possible"</code>, <code>"Within a month"</code>, <code>"Flexible"</code>. Defaults to <code>"Flexible"</code> if omitted. Aliases like <code>"ASAP"</code> are auto-normalized.</td></tr>
+  </table>
+
+  <div class="info-note">
+    💡 <strong>Testing:</strong> To test end-to-end without showing the lead to real contractors, send <code>"city": "Testville"</code>. This city is reserved for QA and only visible to admin accounts.
+  </div>
+
+  <h2>Successful Response <span class="badge">201</span></h2>
+  <pre><code>{
+  "success": true,
+  "lead_id": "a1b2c3d4-...",
+  "job_type": "Tree Removal",
+  "urgency": "As soon as possible",
+  "message": "Lead created successfully"
+}</code></pre>
+
+  <h2>Error Responses</h2>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Action</th></tr>
+    <tr><td><code>400</code></td><td>Missing field, invalid email/phone, invalid URL, bad cost range, or unknown <code>job_type</code></td><td>Check the JSON body against the field reference above. The response body has an <code>error</code> field explaining which validation failed.</td></tr>
+    <tr><td><code>401</code></td><td>Missing or wrong <code>x-webhook-secret</code></td><td>Verify the header value matches exactly.</td></tr>
+    <tr><td><code>405</code></td><td>Wrong HTTP method</td><td>Use <code>POST</code>.</td></tr>
+    <tr><td><code>500</code></td><td>Server error</td><td>Retry. If it persists, contact the TreeCheck team.</td></tr>
+  </table>
+
+  <h2>n8n Node Setup</h2>
+  <div class="flow-box">
+    <div class="step"><span class="step-num">1</span><div>After the GPT estimate step, add an <strong>HTTP Request</strong> node.</div></div>
+    <div class="step"><span class="step-num">2</span><div>Method: <code>POST</code></div></div>
+    <div class="step"><span class="step-num">3</span><div>URL: <code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-lead</code></div></div>
+    <div class="step"><span class="step-num">4</span><div>Under <strong>Headers</strong>, add:<br>
+      <code>Content-Type</code> = <code>application/json</code><br>
+      <code>x-webhook-secret</code> = <code>5jhj47_C_P5_H5i</code>
+    </div></div>
+    <div class="step"><span class="step-num">5</span><div>Body type: <strong>JSON</strong> — map every required field from the form data + GPT output. Example expressions:<br>
+      <code>"photo_url": "{{ $json.photo_url }}"</code><br>
+      <code>"city": "{{ $json.city }}"</code><br>
+      <code>"estimated_cost_min": {{ $json.gpt_low }}</code><br>
+      <code>"estimated_cost_max": {{ $json.gpt_high }}</code><br>
+      <em>(numbers must NOT be wrapped in quotes)</em>
+    </div></div>
+    <div class="step"><span class="step-num">6</span><div>Run the workflow with a test submission. A <code>201</code> response with a <code>lead_id</code> means success — the lead now appears in the contractor dashboard.</div></div>
+  </div>
+
+  <h2>Common Pitfalls</h2>
+  <table>
+    <tr><th>Symptom</th><th>Likely Cause</th></tr>
+    <tr><td>401 Unauthorized</td><td>Header name is misspelled, or value has trailing whitespace.</td></tr>
+    <tr><td>400 "Invalid cost range"</td><td><code>estimated_cost_min</code> / <code>estimated_cost_max</code> were sent as strings instead of numbers, or min &gt; max.</td></tr>
+    <tr><td>400 "Invalid job_type"</td><td>Sent something outside the three canonical values and the alias list. Map the form's dropdown to one of the three exactly.</td></tr>
+    <tr><td>400 "Invalid phone format"</td><td>Phone has extra characters (extension, "x123", letters). Strip to digits or send E.164.</td></tr>
+    <tr><td>400 "Missing required field: customer_address"</td><td>The WordPress form field for address didn't make it through. Check field name mapping in n8n.</td></tr>
+    <tr><td>Lead created but contractors don't see it</td><td>City spelling doesn't match any contractor's service area. Use the canonical city name (e.g. <code>"Oklahoma City"</code>, not <code>"OKC"</code>).</td></tr>
+  </table>
+
+  <h2>What Happens After a 201</h2>
+  <div class="flow-box">
+    <div class="step"><span class="step-num">1</span><div>Lead is stored in the contractor app database.</div></div>
+    <div class="step"><span class="step-num">2</span><div>The photo is auto-downloaded to private storage so the link can't break.</div></div>
+    <div class="step"><span class="step-num">3</span><div>Up to 3 Premium contractors in that city get a 60-minute early-access window.</div></div>
+    <div class="step"><span class="step-num">4</span><div>SMS notifications fire to all qualifying contractors (staggered).</div></div>
+    <div class="step"><span class="step-num">5</span><div>The lead is unlockable by up to 3 contractors total, then marked sold out.</div></div>
+  </div>
+
+  <hr style="margin: 40px 0; border: none; border-top: 1px solid #e5e5e5;">
+  <p style="font-size: 13px; color: #999; text-align: center;">TreeCheck — n8n Integration Guide (create-lead)</p>
+
+</body>
+</html>

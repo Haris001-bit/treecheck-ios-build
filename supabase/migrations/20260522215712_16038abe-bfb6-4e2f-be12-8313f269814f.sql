@@ -1,0 +1,1 @@
+CREATE POLICY "Contractors delete own captures" ON public.scout_captures FOR DELETE USING (auth.uid() = contractor_id);

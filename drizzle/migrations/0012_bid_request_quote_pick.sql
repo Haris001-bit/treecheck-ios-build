@@ -1,0 +1,1 @@
+ALTER TABLE public.bid_requests ADD COLUMN IF NOT EXISTS quote_pick jsonb;

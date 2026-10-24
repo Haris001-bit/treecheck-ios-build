@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN discount_next_lead boolean NOT NULL DEFAULT false;

@@ -1,0 +1,1 @@
+UPDATE public.profiles SET dma_beta_enabled = true WHERE id = '705cecc2-5926-48c1-a728-b3ebd6b920a2';

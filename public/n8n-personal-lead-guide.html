@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>n8n Setup — Personal Lead Webhook (Mark's Website)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1.25rem; color: #1f2937; line-height: 1.6; }
+  h1 { color: #7a9b4d; border-bottom: 3px solid #7a9b4d; padding-bottom: .5rem; }
+  h2 { color: #374151; margin-top: 2rem; }
+  h3 { color: #4b5563; margin-top: 1.5rem; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+  pre { background: #1f2937; color: #f9fafb; padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: .85em; }
+  pre code { background: transparent; color: inherit; padding: 0; }
+  .callout { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .success { background: #d1fae5; border-left: 4px solid #10b981; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .info { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #d1d5db; padding: .5rem .75rem; text-align: left; }
+  th { background: #f9fafb; }
+  .pill { display: inline-block; background: #7a9b4d; color: white; padding: 2px 10px; border-radius: 999px; font-size: .8em; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>n8n Setup: Personal Lead Webhook</h1>
+<p><span class="pill">Estimated build time: 30–45 minutes</span></p>
+<p>This guide is for the n8n developer setting up the automation that pushes leads from <strong>Mark's personal website</strong> into the Stump Commander app. It is a separate pipeline from the existing TreeCheck.ai webhook — same payload contract, different endpoint, different secret.</p>
+
+<div class="info">
+<strong>Why a separate endpoint?</strong> Leads from Mark's personal site are tagged as <code>source: "personal"</code> and auto-assigned to Mark. They are hidden from all other contractors, bypass the city-matching service area logic, and skip the broadcast SMS + Premium rotation that fires for normal TreeCheck.ai leads.
+</div>
+
+<h2>1. Endpoint</h2>
+<table>
+  <tr><th>Method</th><td><code>POST</code></td></tr>
+  <tr><th>URL</th><td><code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-personal-lead</code></td></tr>
+  <tr><th>Content-Type</th><td><code>application/json</code></td></tr>
+  <tr><th>Auth header</th><td><code>x-webhook-secret: &lt;PERSONAL_LEAD_WEBHOOK_SECRET&gt;</code></td></tr>
+</table>
+
+<div class="callout">
+<strong>Secret:</strong> Mark will provide <code>PERSONAL_LEAD_WEBHOOK_SECRET</code> separately (do not commit it to n8n exports). Store it as an n8n credential or environment variable, not in plain workflow JSON. This is a <em>different</em> secret from <code>LEAD_WEBHOOK_SECRET</code> used by TreeCheck.ai — do not reuse.
+</div>
+
+<h2>2. Request payload</h2>
+<p>Identical to the existing TreeCheck.ai contract. All fields except <code>urgency</code> are required.</p>
+
+<pre><code>{
+  "photo_url": "https://markswebsite.com/uploads/tree-photo.jpg",
+  "city": "Edmond",
+  "customer_name": "Jane Homeowner",
+  "customer_email": "jane@example.com",
+  "customer_phone": "+14055551234",
+  "customer_address": "123 Main St, Edmond, OK 73034",
+  "estimated_cost_min": 850,
+  "estimated_cost_max": 1400,
+  "job_type": "Tree Removal",
+  "urgency": "As soon as possible"
+}</code></pre>
+
+<h3>Field rules</h3>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>photo_url</code></td><td>string (URL, max 2048)</td><td>Must be publicly fetchable HTTP/HTTPS. Server downloads + archives to private storage automatically.</td></tr>
+  <tr><td><code>city</code></td><td>string (max 200)</td><td>Free text. Service area matching is bypassed for personal leads.</td></tr>
+  <tr><td><code>customer_name</code></td><td>string (max 200)</td><td>Required.</td></tr>
+  <tr><td><code>customer_email</code></td><td>string (max 320)</td><td>Must pass standard email regex.</td></tr>
+  <tr><td><code>customer_phone</code></td><td>string (max 50)</td><td>E.164 (<code>+14055551234</code>) or US format (<code>(405) 555-1234</code>).</td></tr>
+  <tr><td><code>customer_address</code></td><td>string (max 500)</td><td>Full street address. Used for Google Maps deep link in the app.</td></tr>
+  <tr><td><code>estimated_cost_min</code></td><td>number</td><td>≥ 0.</td></tr>
+  <tr><td><code>estimated_cost_max</code></td><td>number</td><td>≥ min, ≤ 1,000,000.</td></tr>
+  <tr><td><code>job_type</code></td><td>string</td><td>Must normalize to one of: <code>Tree Removal</code>, <code>Stump Grinding</code>, <code>Pruning/Trimming</code>. Common aliases (e.g. "trimming" → Pruning) are accepted.</td></tr>
+  <tr><td><code>urgency</code></td><td>string (optional)</td><td>One of: <code>Emergency</code>, <code>As soon as possible</code> (alias <code>asap</code>), <code>Within a month</code>, <code>Flexible</code>. Defaults to <code>Flexible</code> if omitted.</td></tr>
+</table>
+
+<h2>3. Responses</h2>
+
+<h3>Success — <code>201 Created</code></h3>
+<pre><code>{
+  "success": true,
+  "lead_id": "uuid-here",
+  "source": "personal",
+  "owner_contractor_id": "cf93d0f4-9365-4352-b0cb-10ce93646843",
+  "job_type": "Tree Removal",
+  "urgency": "As soon as possible",
+  "message": "Personal lead created and auto-assigned to owner"
+}</code></pre>
+
+<h3>Error responses</h3>
+<table>
+  <tr><th>Status</th><th>Meaning</th><th>Action</th></tr>
+  <tr><td>400</td><td>Validation failure (bad email, missing field, bad job_type, etc.)</td><td>Check the <code>error</code> field in the JSON response. Do not retry — fix the payload.</td></tr>
+  <tr><td>401</td><td>Missing or wrong <code>x-webhook-secret</code></td><td>Verify the credential. Do not retry blindly.</td></tr>
+  <tr><td>500</td><td>Server error (DB insert failed, etc.)</td><td>Safe to retry with exponential backoff (e.g. 3 attempts, 30s / 2m / 10m).</td></tr>
+</table>
+
+<h2>4. n8n workflow structure</h2>
+<ol>
+  <li><strong>Trigger</strong> — whatever currently fires when Mark's website form is submitted (Webhook node, Form Trigger, or polling).</li>
+  <li><strong>Set / Function node</strong> — map your form field names into the exact JSON payload above. Coerce <code>estimated_cost_min</code> / <code>estimated_cost_max</code> to numbers (n8n form data is often strings).</li>
+  <li><strong>HTTP Request node</strong>:
+    <ul>
+      <li>Method: <code>POST</code></li>
+      <li>URL: <code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-personal-lead</code></li>
+      <li>Headers:
+        <ul>
+          <li><code>Content-Type: application/json</code></li>
+          <li><code>x-webhook-secret: {{ $credentials.personalLeadSecret }}</code></li>
+        </ul>
+      </li>
+      <li>Body: JSON, raw, paste payload referencing your mapped fields.</li>
+      <li>Response: parse JSON, capture <code>lead_id</code>.</li>
+    </ul>
+  </li>
+  <li><strong>IF node</strong> — branch on <code>success === true</code>. On failure, send a Slack/email alert to Mark with the response body so bad payloads don't disappear silently.</li>
+  <li><strong>(Optional) Notify Mark</strong> — Email or SMS step on success. The app does <em>not</em> auto-send an SMS for personal leads (broadcast is intentionally skipped), so if Mark wants a phone alert, add it here.</li>
+</ol>
+
+<div class="success">
+<strong>Sanity test:</strong> Use <code>"city": "Testville"</code> with a fake customer record to verify the end-to-end flow. Mark can confirm it shows up in his <strong>Purchased Leads</strong> view with a green <em>"From My Website"</em> badge. Delete the test row from the DB after.
+</div>
+
+<h2>5. cURL test (for local verification before deploying)</h2>
+<pre><code>curl -X POST https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-personal-lead \
+  -H "Content-Type: application/json" \
+  -H "x-webhook-secret: REPLACE_WITH_SECRET" \
+  -d '{
+    "photo_url": "https://picsum.photos/800/600",
+    "city": "Testville",
+    "customer_name": "Test Customer",
+    "customer_email": "test@example.com",
+    "customer_phone": "+14055550000",
+    "customer_address": "1 Test Lane, Testville, AL 99999",
+    "estimated_cost_min": 500,
+    "estimated_cost_max": 900,
+    "job_type": "Tree Removal",
+    "urgency": "Flexible"
+  }'</code></pre>
+
+<h2>6. Differences vs. the existing TreeCheck.ai webhook</h2>
+<table>
+  <tr><th></th><th>TreeCheck.ai (<code>create-lead</code>)</th><th>Personal (<code>create-personal-lead</code>)</th></tr>
+  <tr><td>Secret env var</td><td><code>LEAD_WEBHOOK_SECRET</code></td><td><code>PERSONAL_LEAD_WEBHOOK_SECRET</code></td></tr>
+  <tr><td>Visible to other contractors</td><td>Yes (city-matched, capped at 3 unlocks)</td><td>No — only Mark + admins</td></tr>
+  <tr><td>Premium rotation assigned</td><td>Yes</td><td>No</td></tr>
+  <tr><td>Broadcast SMS to contractors</td><td>Yes</td><td>No</td></tr>
+  <tr><td>Auto-purchased by owner</td><td>No (contractors pay)</td><td>Yes ($0 purchase row created)</td></tr>
+  <tr><td>UI badge</td><td>—</td><td>Green <em>"From My Website"</em> badge in Purchased Leads</td></tr>
+</table>
+
+<h2>7. Time estimate breakdown</h2>
+<table>
+  <tr><th>Task</th><th>Time</th></tr>
+  <tr><td>Receive secret + store as n8n credential</td><td>5 min</td></tr>
+  <tr><td>Build/clone HTTP Request node + map payload</td><td>15 min</td></tr>
+  <tr><td>Wire up trigger from existing form intake</td><td>10 min</td></tr>
+  <tr><td>Add success/failure branching + alert</td><td>5–10 min</td></tr>
+  <tr><td>End-to-end test with Testville record</td><td>5 min</td></tr>
+  <tr><th>Total</th><th>30–45 min</th></tr>
+</table>
+
+<h2>Questions for Mark</h2>
+<ul>
+  <li>Do you want an SMS alert when a personal lead arrives, or is the in-app appearance enough?</li>
+  <li>Should photos from your personal site be public URLs, or do you need a signed-URL handoff?</li>
+</ul>
+
+</body>
+</html>

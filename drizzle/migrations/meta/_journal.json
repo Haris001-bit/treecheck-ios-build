@@ -1,0 +1,405 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789734091772,
+      "tag": "0000_add_bids_disposal_ground_crew",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789741208955,
+      "tag": "0001_ground_dispatch_stump_grinders_first_refusal",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789772772208,
+      "tag": "0002_scout_multiple_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790169388269,
+      "tag": "0003_fix_crew_availability_owner_bids_role_dispatch_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790189096687,
+      "tag": "0004_ground_dispatch_date_picking",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790194355956,
+      "tag": "0005_bids_mini_skid",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790195158603,
+      "tag": "0006_crew_members_mini_skid_experience",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790200892523,
+      "tag": "0007_crew_recipient_sees_dispatch_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790272186332,
+      "tag": "0008_bid_request_workflow_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790275048752,
+      "tag": "0009_company_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790275979467,
+      "tag": "0010_crew_membership_product",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790279589218,
+      "tag": "0011_network_reviews_scout_subs",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790281103481,
+      "tag": "0012_bid_request_quote_pick",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790283596366,
+      "tag": "0013_bid_request_owner_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790347642596,
+      "tag": "0014_crew_scout_notes_rpc",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790391835937,
+      "tag": "0015_signup_incidents_and_sandbox_markers",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790391873683,
+      "tag": "0016_add_signup_account_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790426724363,
+      "tag": "0017_scout_production_engine_v1",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790459161463,
+      "tag": "0018_scout_company_calibration_v1",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790699175115,
+      "tag": "0019_m1_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790701206555,
+      "tag": "0020_m2_pulse_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790701428282,
+      "tag": "0021_m3_jobber",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790773810141,
+      "tag": "0022_crew_bid_edit_delete_before_accept",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790774635924,
+      "tag": "0023_pruning_multi_tree",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790778381790,
+      "tag": "0024_m4_plaid",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790779326663,
+      "tag": "0025_job_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790799479655,
+      "tag": "0026_climber_confirm_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790856354799,
+      "tag": "0027_m5_pulse_numbers",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790878806655,
+      "tag": "0028_ground_crew_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790961870245,
+      "tag": "0029_dispatch_nudge_reschedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790963461179,
+      "tag": "0030_quote_followup_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791030307165,
+      "tag": "0031_site_visit_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791280765038,
+      "tag": "0032_m6_payment_revenue",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791298908837,
+      "tag": "0033_leslee_jobs_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791298985880,
+      "tag": "0034_job_closed_weekdays_fn",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791304909942,
+      "tag": "0035_m7_loan_payments_not_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791556854969,
+      "tag": "0036_js1_jobber_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791994003241,
+      "tag": "0037_monday_pay_summary",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791994845220,
+      "tag": "0038_home_dashboard",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791995346166,
+      "tag": "0039_jobs_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792068749409,
+      "tag": "0040_js2_job_jobber_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792243500469,
+      "tag": "0041_crew_past_work",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792249524691,
+      "tag": "0042_company_billing_test_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792250762237,
+      "tag": "0043_company_permissions_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792250921140,
+      "tag": "0044_company_team_billing_reads",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792283930551,
+      "tag": "0045_show_crew_rating_from_first_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792332738539,
+      "tag": "0046_add_overhead_per_job",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792352254751,
+      "tag": "0047_dma_company_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792352498317,
+      "tag": "0048_dma_email_content_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792503958012,
+      "tag": "0049_ground_worker_hourly_rate",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792505232368,
+      "tag": "0050_home_ai_summaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792508742451,
+      "tag": "0051_free_owner_plan_oklahoma",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792508897992,
+      "tag": "0052_free_plan_previews",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792610690281,
+      "tag": "0053_scout_learning",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792612656522,
+      "tag": "0054_billing_live",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792615462383,
+      "tag": "0055_setup_before_card",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792684994321,
+      "tag": "0056_crm_interest_alerts",
+      "breakpoints": true
+    }
+  ]
+}

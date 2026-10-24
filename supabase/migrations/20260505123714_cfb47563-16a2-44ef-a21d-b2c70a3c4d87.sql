@@ -1,0 +1,1 @@
+UPDATE public.leads SET job_type = 'Pruning/Trimming' WHERE job_type = 'Pruning';

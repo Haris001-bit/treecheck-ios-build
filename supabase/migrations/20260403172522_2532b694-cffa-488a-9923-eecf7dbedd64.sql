@@ -1,0 +1,1 @@
+UPDATE public.leads SET estimated_cost_min = 450, estimated_cost_max = 750 WHERE id = 'a8b97e1e-7ed5-45d2-a67a-de8df63377c0';

@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dma_beta_enabled boolean NOT NULL DEFAULT false;
+UPDATE public.profiles SET dma_beta_enabled = true WHERE id = 'cf93d0f4-9365-4352-b0cb-10ce93646843';

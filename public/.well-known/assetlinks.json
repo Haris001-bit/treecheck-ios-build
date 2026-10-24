@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.treecheck.app",
+      "sha256_cert_fingerprints": ["SHA256: B5:E4:3A:D9:E8:55:84:1B:9C:0D:2B:B8:0F:8F:49:9B:6A:6D:F9:9D:FA:47:F2:7F:0D:63:1A:35:A7:5A:D4:E7"]
+    }
+  }
+]

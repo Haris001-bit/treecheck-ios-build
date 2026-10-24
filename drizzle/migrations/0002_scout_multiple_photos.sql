@@ -1,0 +1,1 @@
+ALTER TABLE public.scout_captures ADD COLUMN photo_paths text[];

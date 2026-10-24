@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'company';
+CREATE INDEX profiles_account_type_active_idx ON public.profiles (account_type, is_active) WHERE is_sandbox = false;

@@ -1,0 +1,169 @@
+# Codemagic CI - TreeCheck iOS build and TestFlight upload.
+#
+# Adapted from RYNE's working pipeline (RYNE Playbook, "iOS Build Pipeline, Codemagic from Windows"). Haris works on
+# Windows, so every iOS archive is made here. Codemagic's GitHub App cannot reach LaffyCaffi/trccai (a personal
+# account's repo), so it builds Haris's private mirror, Haris001-bit/treecheck-ios-build. Push capacitor to the mirror
+# before every build, or Codemagic builds stale code without saying so.
+
+workflows:
+  ios-testflight:
+    name: TreeCheck iOS - TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      # The newest stable Xcode. "26" resolved to 26.0.1, whose Swift compiler crashed compiling CapApp-SPM
+      # (TreecheckIap.swift) in the first build on 2026-10-19; Amir's builds of the same code compiled. Uploads need
+      # the iOS 26 SDK or later.
+      xcode: latest
+
+      # @capacitor/cli 8 refuses to run below Node 22, and the failure only shows up at cap sync.
+      node: 22
+
+      vars:
+        BUNDLE_ID: "com.treecheck.app"
+        APP_STORE_APPLE_ID: "6773013691"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        # Apple In-App Purchase through RevenueCat (src/lib/platform.ts). It defaults to off, and with it off the
+        # iPhone app has no way to buy anything. The approved 1.0.1 (9) was built with it on. Vite takes VITE_*
+        # values from the environment ahead of .env.
+        VITE_IOS_USE_IAP: "true"
+
+      groups:
+        # Both groups must exist in the Codemagic UI, or the build aborts at once with "unknown variable group".
+        #
+        # treecheck_appstore: the same four values as RYNE's ryne_appstore (one Apple team):
+        #     APP_STORE_CONNECT_PRIVATE_KEY      the full .p8 file contents
+        #     APP_STORE_CONNECT_KEY_IDENTIFIER   the Key ID
+        #     APP_STORE_CONNECT_ISSUER_ID        the Issuer ID
+        #     CERTIFICATE_PRIVATE_KEY            RYNE's ryne-cert-private-key.pem. Reusing it lets fetch-signing-files
+        #                                        find the team's existing distribution certificate instead of minting
+        #                                        a new one (the account's certificate allowance is small).
+        - treecheck_appstore
+        #
+        # treecheck_iap: VITE_REVENUECAT_IOS_API_KEY, RevenueCat's public iOS SDK key (appl_...).
+        - treecheck_iap
+
+    triggering:
+      # Manual only. Lovable commits on its own, and an automatic trigger would spend the free macOS minutes.
+      events: []
+
+    scripts:
+      - name: Check the build settings
+        script: |
+          # .env is committed and holds the Supabase values. Without them the app launches to a blank screen.
+          test -f .env || { echo "ERROR: no .env"; exit 1; }
+          grep -qE 'VITE_SUPABASE_URL=.*https://' .env || { echo "ERROR: VITE_SUPABASE_URL missing or malformed in .env"; exit 1; }
+          [ "$VITE_IOS_USE_IAP" = "true" ] || { echo "ERROR: VITE_IOS_USE_IAP must be true"; exit 1; }
+          case "$VITE_REVENUECAT_IOS_API_KEY" in
+            appl_*) echo "RevenueCat key present." ;;
+            *) echo "ERROR: VITE_REVENUECAT_IOS_API_KEY missing or not an appl_ key (treecheck_iap group)"; exit 1 ;;
+          esac
+
+      - name: Install dependencies
+        script: |
+          # package-lock.json is stale (last updated 2026-09-10; Lovable keeps bun.lock in step with package.json),
+          # so npm ci refuses to run. Install from bun.lock, the lockfile Lovable's own builds use.
+          curl -fsSL https://bun.sh/install | bash
+          "$HOME/.bun/bin/bun" install --frozen-lockfile
+
+      - name: Build the web bundle
+        script: |
+          npm run build
+          # Prove Apple purchases made it into the bundle. Match a real key's length: the code's own error messages
+          # contain the text "appl_" too.
+          grep -q 'VITE_IOS_USE_IAP:"true"' dist/assets/*.js || { echo "ERROR: Apple purchases are off in the bundle"; exit 1; }
+          grep -qE 'appl_[A-Za-z0-9]{10,}' dist/assets/*.js || { echo "ERROR: the RevenueCat key is not in the bundle"; exit 1; }
+
+      - name: Sync web assets into the iOS project
+        script: |
+          # Mandatory: ios/.gitignore excludes the web assets, so a clean clone would archive an empty shell.
+          # Keep it before the archive: on macOS it also writes Package.swift with forward slashes.
+          npx cap sync ios
+          test -f ios/App/App/public/index.html || { echo "ERROR: cap sync produced no web assets"; exit 1; }
+          # A store build bundles its web assets and must never load a live server URL instead.
+          if grep -q '"server"' ios/App/App/capacitor.config.json; then echo "ERROR: capacitor.config.json has a server block"; exit 1; fi
+
+      - name: Set up signing
+        script: |
+          set -e
+          keychain initialize
+
+          # Creates the App Store profile for com.treecheck.app (and finds the certificate issued against
+          # CERTIFICATE_PRIVATE_KEY). Push Notifications must stay enabled on the App ID for aps-environment.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+          keychain add-certificates
+
+          # Writes the profile and the distribution identity into the project, overriding the
+          # Automatic / Apple Development settings committed for local Xcode use.
+          xcode-project use-profiles
+
+          echo "--- provisioning profiles on disk ---"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" 2>/dev/null || echo "NONE FOUND"
+          echo "--- signing settings now in the project ---"
+          grep -nE "DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY" \
+            "$XCODE_PROJECT/project.pbxproj" | sed 's/^[[:space:]]*//' || true
+
+          # The project already has PROVISIONING_PROFILE_SPECIFIER = "" committed, so require a non-empty value.
+          grep -qE 'PROVISIONING_PROFILE_SPECIFIER = "[^"]+";' "$XCODE_PROJECT/project.pbxproj" || {
+            echo "ERROR: use-profiles did not write a provisioning profile into the project."
+            echo "Check the fetch-signing-files output above: most often the API key lacks App Manager access."
+            exit 1
+          }
+
+      - name: Set the build number
+        script: |
+          # Builds 9 and 10 of the next version were uploaded on 2026-10-02, so go above the latest TestFlight build.
+          # agvtool needs VERSIONING_SYSTEM = apple-generic (set in project.pbxproj), or it does nothing.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          NEXT=$((LATEST + 1))
+          [ "$NEXT" -ge 11 ] || NEXT=11
+          echo "Build number: $NEXT"
+          cd ios/App
+          agvtool new-version -all "$NEXT"
+
+      - name: Archive
+        script: |
+          xcodebuild -version
+          # --project, not --workspace: Swift Package Manager, no .xcworkspace.
+          # -Onone: Swift's optimizer crashes (DeadFunctionAndGlobalElimination) on the CapApp-SPM module, which
+          # imports RevenueCat's Capacitor plugin, on Xcode 26.0.1 and 26.6 alike (builds 1 to 3, 2026-10-19).
+          # The native layer is thin plugin glue around the web app, so building it unoptimized costs nothing visible.
+          # COMPILER_INDEX_STORE_ENABLE=NO is build-ipa's default, kept because this flag replaces the defaults.
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release \
+            --archive-xcargs "COMPILER_INDEX_STORE_ENABLE=NO SWIFT_OPTIMIZATION_LEVEL=-Onone" || {
+              # The step summary cuts compiler crashes short; print the part that names the cause.
+              echo "--- compiler errors and crash details ---"
+              grep -h -B2 -A25 -E "Stack dump|error: |Assertion failed|While (evaluating|emitting|deserializing|type-checking|silgen)" /tmp/xcodebuild_logs/*.log 2>/dev/null | head -200
+              exit 1
+            }
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+
+    publishing:
+      email:
+        recipients:
+          - hariswassan001@gmail.com
+        notify:
+          success: true
+          failure: true
+
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+
+        # TestFlight only. The review notes and the reviewer demo account are set by hand in App Store Connect,
+        # and an automated submission would skip both.
+        submit_to_testflight: true
+        submit_to_app_store: false

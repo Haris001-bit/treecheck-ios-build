@@ -1,0 +1,1 @@
+DELETE FROM public.leads WHERE photo_url IS NULL OR photo_url = '' OR photo_url ILIKE '%treecheck.ai/wp-content%';

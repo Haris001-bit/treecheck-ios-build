@@ -1,0 +1,1 @@
+ALTER TABLE public.invitations ADD COLUMN market text NOT NULL DEFAULT 'OKC';

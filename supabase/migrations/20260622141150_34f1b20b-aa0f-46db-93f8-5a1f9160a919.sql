@@ -1,0 +1,3 @@
+DELETE FROM public.lead_purchases WHERE lead_id IN ('8c2a38d2-05cd-40c1-ab17-a4303c8ff987','e2129d1e-c9f1-4f2f-b313-a9f7876774da') AND contractor_id = 'cf93d0f4-9365-4352-b0cb-10ce93646843';
+
+UPDATE public.leads SET owner_contractor_id = NULL, purchase_count = 0, last_purchased_at = NULL, status = 'available' WHERE id IN ('8c2a38d2-05cd-40c1-ab17-a4303c8ff987','e2129d1e-c9f1-4f2f-b313-a9f7876774da');

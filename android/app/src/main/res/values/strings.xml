@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TREECHECK</string>
+    <string name="title_activity_main">TREECHECK</string>
+    <string name="package_name">com.treecheck.app</string>
+    <string name="custom_url_scheme">com.treecheck.app</string>
+</resources>

@@ -1,0 +1,2 @@
+ALTER TABLE public.scout_rate_cards ADD COLUMN overhead_per_job numeric NOT NULL DEFAULT 0;
+COMMENT ON COLUMN public.scout_rate_cards.overhead_per_job IS 'Average overhead amount per job (insurance, admin, fuel, marketing) added to the worksheet cost base before the profit target is applied.';

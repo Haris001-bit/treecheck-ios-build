@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Make → Leads App Integration Guide</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #1a1a1a;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #111;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 32px;
+      margin-bottom: 12px;
+      color: #111;
+      border-bottom: 2px solid #e5e5e5;
+      padding-bottom: 8px;
+    }
+    h3 {
+      font-size: 15px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    p {
+      margin-bottom: 12px;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .endpoint-box {
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .endpoint-box code {
+      background: transparent;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2e7d32;
+      word-break: break-all;
+    }
+    .warning-box {
+      background: #fff3e0;
+      border: 2px solid #ff9800;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .warning-box strong {
+      color: #e65100;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      text-align: left;
+    }
+    th {
+      background: #f8f8f8;
+      font-weight: 600;
+    }
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .section {
+      margin-bottom: 24px;
+    }
+    @media print {
+      body {
+        padding: 20px;
+      }
+      .endpoint-box, .warning-box {
+        break-inside: avoid;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Make → Leads App Integration Guide</h1>
+  <p class="subtitle">Instructions for connecting Make.com scenario to the TreeCheck leads application</p>
+
+  <div class="section">
+    <h2>1. Webhook Endpoint</h2>
+    <p>Use this URL in your Make HTTP module:</p>
+    <div class="endpoint-box">
+      <code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-lead</code>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>2. HTTP Module Configuration</h2>
+    <p>Add an <strong>HTTP "Make a request"</strong> module at the end of your scenario after the estimate, job type, and address have all been finalized.</p>
+    
+    <table>
+      <tr>
+        <th>Setting</th>
+        <th>Value</th>
+      </tr>
+      <tr>
+        <td><strong>URL</strong></td>
+        <td><code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-lead</code></td>
+      </tr>
+      <tr>
+        <td><strong>Method</strong></td>
+        <td>POST</td>
+      </tr>
+      <tr>
+        <td><strong>Body type</strong></td>
+        <td>Raw</td>
+      </tr>
+      <tr>
+        <td><strong>Content type</strong></td>
+        <td>JSON (application/json)</td>
+      </tr>
+    </table>
+
+    <h3>Required Headers</h3>
+    <table>
+      <tr>
+        <th>Header Name</th>
+        <th>Header Value</th>
+      </tr>
+      <tr>
+        <td><code>Content-Type</code></td>
+        <td><code>application/json</code></td>
+      </tr>
+      <tr>
+        <td><code>X-Webhook-Secret</code></td>
+        <td><em>[Secret provided separately - do not share in documents]</em></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>3. Request Body (JSON)</h2>
+    <p>Map your scenario variables to this JSON structure:</p>
+    <pre>{
+  "photo_url": "{{photo_url_from_form}}",
+  "city": "{{city_from_form}}",
+  "customer_name": "{{name_from_form}}",
+  "customer_email": "{{email_from_form}}",
+  "customer_phone": "{{phone_from_form}}",
+  "customer_address": "{{full_address_from_form}}",
+  "estimated_cost_min": {{min_price_number}},
+  "estimated_cost_max": {{max_price_number}},
+  "job_type": "{{job_type_from_form_or_classifier}}",
+  "urgency": "{{urgency_from_form}}"
+}</pre>
+
+    <div class="warning-box">
+      <strong>Important:</strong> The price fields (<code>estimated_cost_min</code> and <code>estimated_cost_max</code>) must be numbers without quotes. Also, <code>job_type</code> must be mapped from the same source you use in any homeowner text and must resolve to one of these values: <code>Tree Removal</code>, <code>Stump Grinding</code>, or <code>Pruning/Trimming</code>.
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>4. Field Requirements</h2>
+    <table>
+      <tr>
+        <th>Field</th>
+        <th>Type</th>
+        <th>Notes</th>
+      </tr>
+      <tr>
+        <td><code>photo_url</code></td>
+        <td>String</td>
+        <td>Must be a publicly accessible image URL</td>
+      </tr>
+      <tr>
+        <td><code>city</code></td>
+        <td>String</td>
+        <td>City name only, e.g. "Yukon" or "Newalla" — must match contractor service areas</td>
+      </tr>
+      <tr>
+        <td><code>customer_name</code></td>
+        <td>String</td>
+        <td>Customer's full name</td>
+      </tr>
+      <tr>
+        <td><code>customer_email</code></td>
+        <td>String</td>
+        <td>Customer's email address</td>
+      </tr>
+      <tr>
+        <td><code>customer_phone</code></td>
+        <td>String</td>
+        <td>Customer's phone number</td>
+      </tr>
+      <tr>
+        <td><code>customer_address</code></td>
+        <td>String</td>
+        <td>Full address line for the lead</td>
+      </tr>
+      <tr>
+        <td><code>estimated_cost_min</code></td>
+        <td>Number</td>
+        <td>Lower bound of price range (no quotes, no $)</td>
+      </tr>
+      <tr>
+        <td><code>estimated_cost_max</code></td>
+        <td>Number</td>
+        <td>Upper bound of price range (no quotes, no $)</td>
+      </tr>
+      <tr>
+        <td><code>job_type</code></td>
+        <td>String</td>
+        <td><strong>Required.</strong> Must be Tree Removal, Stump Grinding, or Pruning/Trimming. Lowercase variants like <code>tree removal</code> and <code>pruning</code> are normalized automatically.</td>
+      </tr>
+      <tr>
+        <td><code>urgency</code></td>
+        <td>String</td>
+        <td>Optional. Supported values: Emergency, As soon as possible, Within a month, Flexible</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>5. Expected Responses</h2>
+    
+    <h3>Success (201)</h3>
+    <pre>{
+  "success": true,
+  "lead_id": "uuid-of-created-lead",
+  "job_type": "Tree Removal",
+  "urgency": "Flexible",
+  "message": "Lead created successfully"
+}</pre>
+
+    <h3>Error Responses</h3>
+    <table>
+      <tr>
+        <th>Status</th>
+        <th>Meaning</th>
+      </tr>
+      <tr>
+        <td><code>401</code></td>
+        <td>Wrong or missing <code>X-Webhook-Secret</code> header</td>
+      </tr>
+      <tr>
+        <td><code>400</code></td>
+        <td>Missing required field, invalid <code>job_type</code>, or invalid data format</td>
+      </tr>
+      <tr>
+        <td><code>500</code></td>
+        <td>Server error — contact administrator</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>6. Testing</h2>
+    <p>Before going live:</p>
+    <ol style="margin-left: 20px; margin-top: 8px;">
+      <li>Run the scenario with test data</li>
+      <li>Check for a <code>201</code> success response</li>
+      <li>Verify the lead appears in the contractor dashboard with the correct job type</li>
+      <li>Confirm the homeowner text and the stored lead use the same job type wording</li>
+      <li>Confirm the image displays correctly</li>
+    </ol>
+  </div>
+
+  <hr style="margin: 32px 0; border: none; border-top: 1px solid #ddd;">
+  <p style="font-size: 12px; color: #888;">
+    Generated for TreeCheck Leads • Contact administrator for the webhook secret
+  </p>
+</body>
+</html>

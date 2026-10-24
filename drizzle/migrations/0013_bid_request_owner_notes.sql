@@ -1,0 +1,1 @@
+ALTER TABLE public.bid_requests ADD COLUMN IF NOT EXISTS owner_notes text;

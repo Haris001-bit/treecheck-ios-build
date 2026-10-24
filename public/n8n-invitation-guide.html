@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Integration Guide: Create Contractor Invitation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 800px; margin: 0 auto; padding: 40px 24px; background: #fafafa; }
+    h1 { font-size: 28px; margin-bottom: 8px; color: #111; }
+    h2 { font-size: 20px; margin: 32px 0 12px; color: #222; border-bottom: 2px solid #e5e5e5; padding-bottom: 6px; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #333; }
+    p { margin-bottom: 12px; color: #444; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 8px; overflow-x: auto; margin: 12px 0 20px; font-size: 13px; line-height: 1.5; }
+    pre code { background: none; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; }
+    th, td { text-align: left; padding: 10px 14px; border: 1px solid #ddd; font-size: 14px; }
+    th { background: #f5f5f5; font-weight: 600; }
+    td code { font-size: 13px; }
+    .badge { display: inline-block; background: #16a34a; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+    .warn { background: #f59e0b; }
+    .flow-box { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 20px; margin: 16px 0; }
+    .flow-box code { background: #eef6ff; color: #1d4ed8; }
+    .step { display: flex; align-items: flex-start; gap: 12px; margin: 10px 0; }
+    .step-num { background: #111; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; margin-top: 2px; }
+    .subtitle { color: #666; font-size: 16px; margin-bottom: 24px; }
+    .security-note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <h1>n8n Integration Guide</h1>
+  <p class="subtitle">Create Contractor Invitation — TreeCheck App</p>
+
+  <h2>Overview</h2>
+  <p>After your n8n workflow qualifies a contractor (insurance certificate approved via GPT), call the TreeCheck <code>create-invitation</code> endpoint to generate an invite link. Send this link to the contractor so they can set up their account and access the dashboard.</p>
+
+  <h2>Endpoint</h2>
+  <pre><code>POST https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-invitation</code></pre>
+
+  <h2>Headers</h2>
+  <table>
+    <tr><th>Header</th><th>Value</th></tr>
+    <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+    <tr><td><code>x-webhook-secret</code></td><td><code>5jhj47_C_P5_H5i</code></td></tr>
+  </table>
+
+  <div class="security-note">
+    ⚠️ <strong>Keep the webhook secret secure.</strong> Do not share it publicly or commit it to version control.
+  </div>
+
+  <h2>Request Body</h2>
+  <pre><code>{
+  "email": "contractor@example.com",
+  "application_id": null
+}</code></pre>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+    <tr><td><code>email</code></td><td>string</td><td>Yes</td><td>Contractor's email address</td></tr>
+    <tr><td><code>application_id</code></td><td>string / null</td><td>No</td><td>Can be <code>null</code> — only needed if tracking applications in the TreeCheck app</td></tr>
+  </table>
+
+  <h2>Successful Response <span class="badge">200</span></h2>
+  <pre><code>{
+  "success": true,
+  "invite_url": "https://app.treecheck.ai/accept-invite?token=abc123-...",
+  "invite_token": "abc123-...",
+  "expires_at": "2026-03-10T12:00:00Z"
+}</code></pre>
+  <table>
+    <tr><th>Field</th><th>Description</th></tr>
+    <tr><td><code>invite_url</code></td><td>The full URL to send to the contractor. They click this to create their account.</td></tr>
+    <tr><td><code>invite_token</code></td><td>The raw token (if you need to construct the URL yourself).</td></tr>
+    <tr><td><code>expires_at</code></td><td>Invitation expires in <strong>7 days</strong>.</td></tr>
+  </table>
+
+  <h2>Error Responses</h2>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Action</th></tr>
+    <tr><td><code>401</code></td><td>Invalid or missing <code>x-webhook-secret</code></td><td>Check the header value</td></tr>
+    <tr><td><code>400</code></td><td>Missing email</td><td>Ensure <code>email</code> is in the request body</td></tr>
+    <tr><td><code>500</code></td><td>Server error</td><td>Retry or contact the TreeCheck team</td></tr>
+  </table>
+
+  <h2>n8n Node Setup</h2>
+  <div class="flow-box">
+    <div class="step"><span class="step-num">1</span><div>Add an <strong>HTTP Request</strong> node after your GPT approval step</div></div>
+    <div class="step"><span class="step-num">2</span><div>Method: <code>POST</code></div></div>
+    <div class="step"><span class="step-num">3</span><div>URL: <code>https://wsbtxxobbvcdxiovnssi.supabase.co/functions/v1/create-invitation</code></div></div>
+    <div class="step"><span class="step-num">4</span><div>Under <strong>Headers</strong>, add: <code>x-webhook-secret</code> = <code>5jhj47_C_P5_H5i</code></div></div>
+    <div class="step"><span class="step-num">5</span><div>Body type: <strong>JSON</strong> — set <code>email</code> using the expression from your form data (e.g. <code>{{ $json.email }}</code>)</div></div>
+    <div class="step"><span class="step-num">6</span><div>Connect a <strong>Send Email</strong> or <strong>Send SMS</strong> node after, using <code>{{ $json.invite_url }}</code> from the HTTP response</div></div>
+  </div>
+
+  <h2>Complete Flow</h2>
+  <div class="flow-box" style="text-align:center; font-size: 15px;">
+    <strong>Website Form</strong> → <strong>GPT Insurance Check</strong> → ✅ Approved → <strong>HTTP Request</strong> <em>(create-invitation)</em> → <strong>Send invite_url to contractor</strong>
+  </div>
+
+  <h2>What Happens Next</h2>
+  <p>When the contractor clicks the invite link:</p>
+  <div class="flow-box">
+    <div class="step"><span class="step-num">1</span><div>They land on the TreeCheck account setup page</div></div>
+    <div class="step"><span class="step-num">2</span><div>They create a password and fill in their company details</div></div>
+    <div class="step"><span class="step-num">3</span><div>They choose Free or Premium tier</div></div>
+    <div class="step"><span class="step-num">4</span><div>Their account is created and they can access the contractor dashboard</div></div>
+  </div>
+
+  <hr style="margin: 40px 0; border: none; border-top: 1px solid #e5e5e5;">
+  <p style="font-size: 13px; color: #999; text-align: center;">TreeCheck — n8n Integration Guide</p>
+
+</body>
+</html>

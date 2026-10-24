@@ -1,0 +1,31 @@
+project_id = "wsbtxxobbvcdxiovnssi"
+
+[functions.lsa-webhook]
+verify_jwt = false
+
+[functions.scout-estimate-callback]
+verify_jwt = false
+
+[functions.sync-scout-entitlement]
+verify_jwt = false
+
+[functions.jobber-webhook]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.crew-join]
+verify_jwt = false
+
+[functions.dma-live-posts]
+verify_jwt = false
+
+[functions.jobber-oauth-callback]
+verify_jwt = false
+
+[functions.plaid-webhook]
+verify_jwt = false
