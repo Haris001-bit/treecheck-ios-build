@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import { reportSeriousError } from '@/lib/errorReporter';
 
 export default function StartTrialSuccess() {

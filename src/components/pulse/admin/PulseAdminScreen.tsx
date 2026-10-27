@@ -29,7 +29,8 @@ export interface PulseAdminScreenProps {
   onRetry: () => void;
 }
 
-const MAX_LIMIT = 5;
+// The most banks a company can be given here: pulse-admin and pulse_access.max_items both allow 10.
+const MAX_LIMIT = 10;
 
 function bankLine(b: AdminCompany["banks"][number]): { text: string; bad: boolean } {
   const name = b.institution_name?.trim() || "A bank";
@@ -44,8 +45,9 @@ function bankLine(b: AdminCompany["banks"][number]): { text: string; bad: boolea
 export function PulseAdminScreen(props: PulseAdminScreenProps) {
   const h = props.health;
   const used = h?.production_connections.used ?? null;
-  const cap = h?.production_connections.cap ?? 9;
-  const limit = h?.production_connections.trial_limit ?? 10;
+  // null: no limit (Plaid's paid plan). Older servers send the Trial's 9 and 10.
+  const cap = h ? h.production_connections.cap ?? null : 9;
+  const limit = h ? h.production_connections.trial_limit ?? null : 10;
   const problems: string[] = [];
   if (h) {
     if (!h.secrets.PLAID_SECRET_PRODUCTION || !h.secrets.PLAID_TOKEN_KEY_PRODUCTION) problems.push("Real-bank keys aren't set up yet, so companies on real banks can't link a bank. Haris sets these up.");
@@ -73,9 +75,14 @@ export function PulseAdminScreen(props: PulseAdminScreenProps) {
 
       <div className="grid gap-4 md:grid-cols-2 items-start">
         <Card className="p-5 space-y-3">
-          <p className="text-sm font-bold flex items-center gap-2"><Landmark className="w-4 h-4 text-primary" /> Free bank connections</p>
+          <p className="text-sm font-bold flex items-center gap-2"><Landmark className="w-4 h-4 text-primary" /> {cap === null ? "Bank connections" : "Free bank connections"}</p>
           {used === null ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : cap === null || limit === null ? (
+            <>
+              <p className="text-3xl font-bold tabular-nums">{used} made</p>
+              <p className="text-sm text-muted-foreground">Plaid's paid plan has no limit, so companies can keep linking banks.</p>
+            </>
           ) : (
             <>
               <p className="text-3xl font-bold tabular-nums">{used} of {limit} used</p>

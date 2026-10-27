@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Check, Crown, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import { SubscriptionTier } from '@/lib/subscriptions';
 import { cn } from '@/lib/utils';
 import { GetTheApp } from '@/components/GetTheApp';

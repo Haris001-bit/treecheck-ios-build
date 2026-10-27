@@ -26,7 +26,8 @@ export interface AdminCompany {
 export interface AdminHealth {
   secrets: Record<string, boolean>;
   token_keys: Record<PlaidEnv, { configured: boolean; works: boolean; stored_token_readable: boolean | null }>;
-  production_connections: { used: number; cap: number; trial_limit: number };
+  /** cap and trial_limit are null when there is no TreeCheck-wide limit (Plaid's paid plan, from 2026-10-26). */
+  production_connections: { used: number; cap: number | null; trial_limit: number | null };
   connections_needing_support: number;
   redirect_uri_set: boolean;
 }

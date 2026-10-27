@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import { Camera, MapPin, Ruler, Mic, Send, Inbox, CheckCircle2, Info } from "lucide-react";
-import treecheckLogo from "@/assets/treecheck-logo-dark.png";
+import treecheckLogo from "@/assets/treecheck-white-login.png";
 import measureTreeImg from "@/assets/measure-tree-circumference.png";
 
 const steps = [

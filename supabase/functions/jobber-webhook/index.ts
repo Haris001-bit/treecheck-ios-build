@@ -481,6 +481,33 @@ async function processPulse(admin: Loose, ownerId: string, topic: string, itemId
   return "pulse: updated";
 }
 
+// Large-company setup: a cheap check that the event can concern one of the company's crew estimates in Jobber (the
+// quote itself, or any job or visit while the company has one), then production-jobber does the work with the service
+// key, as bid-hire does above. Companies without crew estimates in Jobber (or before PS1 exists) cost one query.
+const PRODUCTION_MS = 25_000;
+async function productionEvent(
+  admin: Loose,
+  ownerId: string,
+  topic: string,
+  itemId: string,
+  SUPABASE_URL: string,
+  SERVICE: string,
+): Promise<string | null> {
+  const base = admin.from("production_estimates").select("id").eq("contractor_id", ownerId);
+  const { data, error } = topic.startsWith("QUOTE_")
+    ? await base.eq("jobber_quote_id", itemId).limit(1)
+    : await base.not("jobber_quote_id", "is", null).limit(1);
+  if (error || !data?.length) return null;
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/production-jobber`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE}` },
+    body: JSON.stringify({ ownerId, topic, itemId }),
+    signal: AbortSignal.timeout(PRODUCTION_MS),
+  });
+  const reply = await r.json().catch(() => null) as { outcome?: string } | null;
+  return `production: ${reply?.outcome ?? `HTTP ${r.status}`}`;
+}
+
 // The company whose live Jobber connection holds this Jobber account. No match, no processing.
 async function routeOwner(admin: Loose, accountId: string | null): Promise<string | null> {
   if (!accountId) return null;
@@ -603,9 +630,21 @@ async function processEvent(
     }
   }
 
-  const outcome = errors.length
+  // Large-company setup: crew estimates sent to Jobber and the jobs made from them. Its own try, and its outcome is only
+  // added to the log, so it never changes how the parts above are recorded.
+  let production: string | null = null;
+  if (itemId && /^(QUOTE|JOB|VISIT)_/.test(topic)) {
+    try {
+      production = await productionEvent(admin, ownerId, topic, itemId, SUPABASE_URL, SERVICE);
+    } catch (e) {
+      production = "production: " + String((e as Error).message ?? e).slice(0, 200);
+    }
+  }
+
+  let outcome = errors.length
     ? errors.join("; ")
     : legacy.outcome ?? (handled ? pulse : `ignored topic: ${topic}`);
+  if (production) outcome = handled || errors.length ? [outcome, production].filter(Boolean).join("; ") : production;
   if (errors.length) console.error("jobber-webhook error", outcome);
   await finish({
     processed: errors.length === 0,

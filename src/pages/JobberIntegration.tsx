@@ -17,6 +17,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, CheckCircle2, Link as LinkIcon, Download, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  JOBBER_WAITLIST_CODE,
+  JOBBER_WAITLIST_MESSAGE,
+  JOBBER_WAITLIST_TITLE,
+} from '../../supabase/functions/_shared/connectWaitlist';
 
 export default function JobberIntegration() {
   const { user } = useAuth();
@@ -27,6 +32,8 @@ export default function JobberIntegration() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  // Mark's stand by message, when no Jobber place is this company's yet (jobber-connect, JC1).
+  const [waitlist, setWaitlist] = useState<{ title: string; message: string } | null>(null);
   const marketplaceStarted = useRef(false);
 
   const jobberError = params.get('jobber_error');
@@ -67,6 +74,14 @@ export default function JobberIntegration() {
         body: { return_to: `${window.location.origin}/dashboard/integrations/jobber` },
       });
       if (error) throw new Error(error.message);
+      if (data?.code === JOBBER_WAITLIST_CODE) {
+        setWaitlist({
+          title: typeof data.title === 'string' && data.title ? data.title : JOBBER_WAITLIST_TITLE,
+          message: typeof data.error === 'string' && data.error ? data.error : JOBBER_WAITLIST_MESSAGE,
+        });
+        setWorking(false);
+        return;
+      }
       if (data?.error) throw new Error(data.error);
       // Jobber's login page can't be embedded in an iframe (Lovable preview),
       // so open a new tab when we're not the top-level window.
@@ -236,6 +251,18 @@ export default function JobberIntegration() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => void disconnect()}>Disconnect</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={waitlist !== null} onOpenChange={(open) => { if (!open) setWaitlist(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{waitlist?.title ?? JOBBER_WAITLIST_TITLE}</AlertDialogTitle>
+            <AlertDialogDescription>{waitlist?.message ?? JOBBER_WAITLIST_MESSAGE}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

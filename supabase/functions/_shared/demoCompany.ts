@@ -19,6 +19,31 @@ export function otherDemoLogin(userId: string): { id: string; open: string } | n
   return null;
 }
 
+/**
+ * Every demo login the switch can open (the picker, 2026-10-26): the Timber demo pair, and the large-company demo's
+ * owner and crew leader, which Haris creates with these emails and docs/demo/demo_production_setup.sql sets up. Only
+ * these, only for each other, and only while they are sandbox logins.
+ */
+export interface DemoLogin { key: string; label: string; id?: string; email?: string; open: string }
+export const DEMO_LOGINS: readonly DemoLogin[] = [
+  { key: "timber_owner", label: "Timber Demo: owner", id: DEMO_OWNER_ID, open: "/dashboard/bid-board" },
+  { key: "timber_climber", label: "Timber Demo: climber", id: DEMO_CLIMBER_ID, open: "/dashboard/crew-bids" },
+  { key: "bigoak_owner", label: "Big Oak: owner", email: "bigoak.owner@treecheck.test", open: "/dashboard/bid-board/crew" },
+  { key: "bigoak_crew", label: "Big Oak: crew leader", email: "bigoak.crew@treecheck.test", open: "/dashboard/bid-board/crew" },
+];
+
+/** The demo emails to look up, and each demo login's id once the profiles found by those emails are known. */
+export const DEMO_EMAILS = DEMO_LOGINS.flatMap((l) => (l.email ? [l.email] : []));
+export function demoLoginIds(found: { id: string; email: string | null }[]): Map<string, string> {
+  const byEmail = new Map(found.filter((p) => p.email).map((p) => [p.email!.toLowerCase(), p.id]));
+  const ids = new Map<string, string>();
+  for (const l of DEMO_LOGINS) {
+    const id = l.id ?? (l.email ? byEmail.get(l.email) : undefined);
+    if (id) ids.set(l.key, id);
+  }
+  return ids;
+}
+
 /** The earliest publish time that is still live at nowMs, as an ISO string. */
 export function liveSince(nowMs: number): string {
   return new Date(nowMs - LIVE_POST_MINUTES * 60_000).toISOString();

@@ -7,13 +7,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [done, setDone] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function ResetPassword() {
       return;
     }
     toast.success('Password updated');
-    navigate('/dashboard', { replace: true });
+    setDone(true);
   };
 
   return (
@@ -61,7 +62,17 @@ export default function ResetPassword() {
           <CardDescription className="text-sm">Choose a new password</CardDescription>
         </CardHeader>
         <CardContent>
-          {!ready ? (
+          {done ? (
+            <div className="space-y-4 text-center text-sm">
+              <p className="font-medium text-foreground">Password saved.</p>
+              <p className="text-muted-foreground">
+                Open the TreeCheck app on your phone and sign in with your email and new password.
+              </p>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/dashboard', { replace: true })}>
+                Or continue in this browser
+              </Button>
+            </div>
+          ) : !ready ? (
             <div className="space-y-4 text-center text-sm text-muted-foreground">
               <p>
                 This page works only when opened from the reset link in your email. Open that link again on this

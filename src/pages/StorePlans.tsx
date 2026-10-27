@@ -9,7 +9,7 @@ import { Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import { useAuth } from '@/lib/auth';
 import { canUseStorePlans, isNativeAndroid, storeName } from '@/lib/platform';
 import { companyBillingAction } from '@/hooks/useCompanyBilling';

@@ -6,6 +6,8 @@ import { billingRollout, plansOpenFor } from "../_shared/billingRollout.ts";
 import { openCompanyPlan } from "../_shared/companyPlanOpen.ts";
 import { fromNativeApp } from "../_shared/nativeClient.ts";
 import { geocodeBusinessPlace, type Place } from "../_shared/businessPlace.ts";
+import { parseConsent, recordConsent } from "../_shared/consent.ts";
+import { giveawayOpen, recordGiveawayEntry, type EntryStatus } from "../_shared/giveaway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +42,9 @@ serve(async (req) => {
     }
 
     if (password.length < 8) throw new Fixable("Password must be at least 8 characters");
+    // Account messages are required to run a trial; marketing is optional and never a condition of signing up.
+    const consent = parseConsent(body?.consent);
+    if (!consent?.account) throw new Fixable("Check the box to agree to account messages about your trial and billing.");
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY")!;
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -125,6 +130,13 @@ serve(async (req) => {
       });
     }
 
+    await recordConsent(admin, req, userId, consent, { email, phone }, startFree ? "free-signup" : "trial-signup");
+    // Starting the 14-day trial enters the RipSaw giveaway (one entry per email). Recorded at the step where the trial
+    // starts or checkout opens below; never blocks or changes the signup.
+    const enterGiveaway = (status: EntryStatus) => giveawayOpen()
+      ? recordGiveawayEntry(admin, req, { userId, fullName: full_name, email, phone, companyName: company_name, region: state, source: "trial-signup", status })
+      : Promise.resolve(null);
+
     // 4. Service area (default city, when provided), for a new account only.
     if (!existing && city && String(city).trim()) {
       await admin.from("service_areas").insert({ contractor_id: userId, city: String(city).trim() });
@@ -166,6 +178,8 @@ serve(async (req) => {
       });
       if (refusal) throw new Fixable(refusal);
       log("Company plan opened, checkout next", { userId, trial: !trialUsed });
+      // The trial starts when Stripe Checkout finishes; giveaway-draw counts the entry once it has.
+      if (!trialUsed) await enterGiveaway("awaiting_trial");
       return new Response(JSON.stringify({ checkout_next: true, trial: !trialUsed, user_id: userId }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -186,6 +200,7 @@ serve(async (req) => {
       if (billingError) throw billingError;
     }
     log("Trial started without a card", { userId });
+    await enterGiveaway("entered");
     return new Response(JSON.stringify({
       trial_started: true,
       trial_ends_at: trialEndsAt,

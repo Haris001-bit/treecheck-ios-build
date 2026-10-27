@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import treecheckLogo from "@/assets/treecheck-logo-dark.png";
+import treecheckLogo from "@/assets/treecheck-white-login.png";
 
 export default function Privacy() {
   return (

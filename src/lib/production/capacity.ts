@@ -1,0 +1,127 @@
+/**
+ * Large-company setup: sold work as demand against capacity. "3-person production demand next 14 days: 126
+ * crew-hours, available 112." No route optimizer: TreeCheck suggests a day and the dispatcher confirms in Jobber. Pure.
+ * Dates are YYYY-MM-DD strings in the company's own time zone.
+ */
+import { r2 } from './answers';
+
+export interface CapacitySettings {
+  /** How many crews of each template the company runs. */
+  crewCounts: Record<string, number>;
+  /** 0 = Sunday ... 6 = Saturday. */
+  workingDays: number[];
+  dayHours: number;
+  resources: { key: string; units: number; hoursPerDay: number }[];
+  closedDates?: string[];
+}
+
+export interface CapacityPacket {
+  id: string;
+  crewTemplate: string | null;
+  estCrewHours: number;
+  resources: { key: string; hours: number }[];
+  status: string;
+  plannedDate?: string | null;
+  scheduledDate?: string | null;
+  promisedWindow?: { from?: string | null; to?: string | null } | null;
+  schedulingClass?: string | null;
+}
+
+const OPEN = new Set(['ready', 'planned', 'scheduled', 'in_progress']);
+
+/** The capacity settings from a company's saved setup: crews per template (one number, or one per branch, summed), days, hours, resources. */
+export function capacitySettingsOf(s: {
+  crew_counts?: Record<string, number | Record<string, number>> | null;
+  basics?: { workingDays?: number[]; dayHours?: number } | null;
+  resources?: { key: string; units?: number; hoursPerDay?: number }[] | null;
+} | null | undefined): CapacitySettings {
+  const crewCounts: Record<string, number> = {};
+  for (const [k, v] of Object.entries(s?.crew_counts ?? {})) {
+    crewCounts[k] = typeof v === 'number' ? v : Object.values(v ?? {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  }
+  return {
+    crewCounts,
+    workingDays: s?.basics?.workingDays ?? [1, 2, 3, 4, 5],
+    dayHours: s?.basics?.dayHours ?? 8,
+    resources: (s?.resources ?? []).map((r) => ({ key: r.key, units: Number(r.units) || 0, hoursPerDay: Number(r.hoursPerDay) || 0 })),
+  };
+}
+
+export function addDays(day: string, n: number): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const weekday = (day: string) => new Date(`${day}T12:00:00Z`).getUTCDay();
+
+export function workingDates(from: string, days: number, s: CapacitySettings): string[] {
+  const closed = new Set(s.closedDates ?? []);
+  const out: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = addDays(from, i);
+    if (s.workingDays.includes(weekday(d)) && !closed.has(d)) out.push(d);
+  }
+  return out;
+}
+
+const dateOf = (p: CapacityPacket) => p.scheduledDate ?? p.plannedDate ?? p.promisedWindow?.from ?? null;
+
+export interface CapacityRow { key: string; demand: number; available: number; over: boolean }
+export interface CapacityView { from: string; to: string; workingDays: number; crews: CapacityRow[]; resources: CapacityRow[] }
+
+/**
+ * Demand in the window: open packets dated inside it, plus open packets with no date yet (sold work waiting to be
+ * scheduled). Available: crews x working days x day length; resources: units x hours a day x working days.
+ */
+export function capacityView(packets: CapacityPacket[], s: CapacitySettings, from: string, days = 14): CapacityView {
+  const to = addDays(from, days - 1);
+  const wd = workingDates(from, days, s).length;
+  const inWindow = packets.filter((p) => OPEN.has(p.status) && (() => { const d = dateOf(p); return d === null || (d >= from && d <= to); })());
+  const crewDemand = new Map<string, number>();
+  const resDemand = new Map<string, number>();
+  for (const p of inWindow) {
+    const k = p.crewTemplate ?? 'unassigned';
+    crewDemand.set(k, r2((crewDemand.get(k) ?? 0) + p.estCrewHours));
+    for (const r of p.resources) resDemand.set(r.key, r2((resDemand.get(r.key) ?? 0) + r.hours));
+  }
+  const crewKeys = [...new Set([...Object.keys(s.crewCounts), ...crewDemand.keys()])];
+  const crews = crewKeys.map((k) => {
+    const available = r2((s.crewCounts[k] ?? 0) * wd * s.dayHours);
+    const demand = crewDemand.get(k) ?? 0;
+    return { key: k, demand, available, over: demand > available };
+  });
+  const resKeys = [...new Set([...s.resources.map((r) => r.key), ...resDemand.keys()])];
+  const resources = resKeys.map((k) => {
+    const r = s.resources.find((x) => x.key === k);
+    const available = r ? r2(r.units * r.hoursPerDay * wd) : 0;
+    const demand = resDemand.get(k) ?? 0;
+    return { key: k, demand, available, over: r ? demand > available : false };
+  });
+  return { from, to, workingDays: wd, crews, resources };
+}
+
+/** Booked work in weeks: open crew-hours over what all crews can do in a week. */
+export function backlogWeeks(packets: CapacityPacket[], s: CapacitySettings): number {
+  const weekly = Object.values(s.crewCounts).reduce((sum, n) => sum + n, 0) * s.workingDays.length * s.dayHours;
+  if (weekly <= 0) return 0;
+  const open = packets.filter((p) => OPEN.has(p.status)).reduce((sum, p) => sum + p.estCrewHours, 0);
+  return r2(open / weekly);
+}
+
+/**
+ * The first working day (from `from`, or the promised window's start) when the packet's crew template still has the
+ * hours free, given the other packets already dated. ASAP work looks from today; null when nothing fits in 60 days.
+ */
+export function suggestSlot(packet: CapacityPacket, packets: CapacityPacket[], s: CapacitySettings, from: string): string | null {
+  const start = packet.schedulingClass === 'asap' ? from : (packet.promisedWindow?.from && packet.promisedWindow.from > from ? packet.promisedWindow.from : from);
+  const tpl = packet.crewTemplate ?? 'unassigned';
+  const daily = (s.crewCounts[tpl] ?? 0) * s.dayHours;
+  if (daily <= 0) return null;
+  const need = Math.min(packet.estCrewHours, daily);
+  for (const d of workingDates(start, 60, s)) {
+    const used = packets.filter((p) => p.id !== packet.id && OPEN.has(p.status) && (p.crewTemplate ?? 'unassigned') === tpl && dateOf(p) === d)
+      .reduce((sum, p) => sum + p.estCrewHours, 0);
+    if (daily - used >= need) return d;
+  }
+  return null;
+}

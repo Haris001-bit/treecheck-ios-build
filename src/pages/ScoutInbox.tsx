@@ -16,6 +16,7 @@ import { calculateWorksheet, worksheetFromRow, worksheetSummary } from '@/lib/sc
 import { RequestCrewBidsDialog, type RequestCrewBidsSeed } from '@/components/RequestCrewBidsDialog';
 import { ProductionPlanCard } from '@/components/production/ProductionPlanCard';
 import { useCompanySettings, usesProductionPlan } from '@/hooks/useCompanySettings';
+import { useProductionStatus } from '@/hooks/useProductionStatus';
 import { LockedScoutEstimate } from '@/components/free/LockedScoutEstimate';
 
 interface InboxRow extends ScoutCapture {
@@ -33,7 +34,9 @@ const priceRange = (min?: number | null, max?: number | null) => {
 
 export default function ScoutInbox({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: companySettings } = useCompanySettings();
-  const showProduction = usesProductionPlan(companySettings);
+  // Once a company starts the large-company setup, its production costs are for the people it picked to see costs.
+  const { status: production } = useProductionStatus();
+  const showProduction = usesProductionPlan(companySettings) && (!production.started || production.can.costs);
   const { user } = useAuth();
   const navigate = useNavigate();
   const { rates } = useScoutRates();

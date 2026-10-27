@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { PasswordRecoveryRedirect } from "@/components/PasswordRecoveryRedirect";
 import DashboardLayout from "@/components/DashboardLayout";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -52,6 +53,9 @@ import CrewNetwork from "./pages/CrewNetwork";
 import BidBoard from "./pages/BidBoard";
 import ScoutStart from "./pages/ScoutStart";
 import SettingsAdmin from "./pages/SettingsAdmin";
+import ProductionSetup from "./pages/ProductionSetup";
+import ProductionEstimate from "./pages/ProductionEstimate";
+import ProductionJobs from "./pages/ProductionJobs";
 import AdminReviewReports from "./pages/AdminReviewReports";
 import { ScoutRequiredGate, CrewMembershipGate } from "./components/PaidFeatureGate";
 import CrewBids from "./pages/CrewBids";
@@ -65,6 +69,9 @@ import StorePlans from "./pages/StorePlans";
 import HowWeWork from "./pages/HowWeWork";
 import LeadsHub from "./pages/LeadsHub";
 import AdminSignupSandbox from "./pages/AdminSignupSandbox";
+import AdminGiveaway from "./pages/AdminGiveaway";
+import Giveaway from "./pages/Giveaway";
+import GiveawayRules from "./pages/GiveawayRules";
 import PulseSetup from "./pages/PulseSetup";
 import PulseOAuthReturn from "./pages/PulseOAuthReturn";
 import PulseTransactions from "./pages/PulseTransactions";
@@ -103,6 +110,7 @@ const App = () => (
         <BrowserRouter>
           {showDebugConsole && <DebugConsole />}
           <NativeBridge />
+          <PasswordRecoveryRedirect />
           <SafeModeToggle />
           <ReturnToAppButton />
 
@@ -127,6 +135,8 @@ const App = () => (
             <Route path="/frequently-wronged-assumptions" element={<FrequentlyWrongedAssumptions />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/giveaway" element={<Giveaway />} />
+            <Route path="/giveaway/rules" element={<GiveawayRules />} />
 
             <Route path="/support" element={<Support />} />
             <Route path="/start-trial" element={<StartTrial />} />
@@ -160,12 +170,15 @@ const App = () => (
               <Route path="lsa" element={<LSALeads />} />
               <Route path="lsa-settings" element={<LSASettings />} />
               <Route path="instant-estimator" element={<CompanyPermissionGate permission="createScout" allowFree><EntitlementGate product="scout" allowFree><InstantEstimator /></EntitlementGate></CompanyPermissionGate>} />
+              <Route path="instant-estimator/crew" element={<ProductionEstimate />} />
+              <Route path="instant-estimator/crew/:id" element={<ProductionEstimate />} />
               <Route path="scout-inbox" element={<Navigate to="/dashboard/bid-board?tab=review" replace />} />
               <Route path="scout-rates" element={<EntitlementGate product="scout"><ScoutRates /></EntitlementGate>} />
 
 
               <Route path="crew-network" element={<ScoutRequiredGate allowFree><CrewNetwork /></ScoutRequiredGate>} />
               <Route path="bid-board" element={<ScoutRequiredGate allowFree><BidBoard /></ScoutRequiredGate>} />
+              <Route path="bid-board/crew" element={<ProductionJobs />} />
               <Route path="pay" element={<ScoutRequiredGate><PayWeek /></ScoutRequiredGate>} />
               <Route path="ground-hours" element={<GroundHours />} />
               <Route path="crew-bids" element={<CrewMembershipGate><CrewBids /></CrewMembershipGate>} />
@@ -182,10 +195,12 @@ const App = () => (
               <Route path="admin/review-reports" element={<AdminReviewReports />} />
               <Route path="start" element={<ScoutStart />} />
               <Route path="settings/admin" element={<SettingsAdmin />} />
+              <Route path="settings/crews" element={<ProductionSetup />} />
               <Route path="admin/contractors" element={<AdminContractors />} />
               <Route path="admin/contractors/:id" element={<AdminContractorDetail />} />
               <Route path="admin/app-review" element={<AppReviewDiagnostics />} />
               <Route path="admin/signup-sandbox" element={<AdminSignupSandbox />} />
+              <Route path="admin/giveaway" element={<AdminGiveaway />} />
               <Route path="subscription-info" element={<SafeModeInfo />} />
             </Route>
 

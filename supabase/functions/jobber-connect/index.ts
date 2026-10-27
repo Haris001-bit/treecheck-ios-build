@@ -1,5 +1,19 @@
 // Returns a Jobber OAuth authorize URL for the caller to visit.
+// Until Jobber approves the app, a company gets the link only while a Jobber place is theirs (JC1,
+// jobber_claim_connect): otherwise it sees Mark's stand by message and Mark gets one text and email about it.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  JOBBER_WAITLIST_CODE,
+  JOBBER_WAITLIST_MESSAGE,
+  JOBBER_WAITLIST_TITLE,
+  waitlistAlertEmail,
+  waitlistAlertText,
+} from "../_shared/connectWaitlist.ts";
+import { notifyCtx, sendEmail, sendSms } from "../_shared/tcNotify.ts";
+
+// Mark's phone and TreeCheck admin email, the ones crm-interest-alert uses.
+const ADMIN_PHONE = "+13036693816";
+const ADMIN_EMAIL = "mark@tradesmarketing.ai";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,9 +87,18 @@ Deno.serve(async (req) => {
       .eq("contractor_id", u.user.id)
       .lt("created_at", new Date(Date.now() - 24 * 3600_000).toISOString());
     const state = crypto.randomUUID();
-    const { error: sErr } = await admin.from("jobber_oauth_states")
-      .insert({ state, contractor_id: u.user.id, ...(returnTo ? { return_to: returnTo } : {}) });
-    if (sErr) throw new Error(`state save failed: ${sErr.message}`);
+    // JC1: the state is recorded only through the claim, which refuses when no Jobber place is this company's.
+    const { data: claim, error: cErr } = await admin.rpc("jobber_claim_connect", {
+      p_owner: u.user.id,
+      p_state: state,
+      p_return_to: returnTo,
+    });
+    if (cErr) throw new Error(`connect claim failed: ${cErr.message}`);
+    if (claim?.allowed !== true) {
+      await alertMark(admin, u.user.id, claim);
+      // 200 with a code so the page can show the popup (older apps show the message as an error note).
+      return json({ code: JOBBER_WAITLIST_CODE, title: JOBBER_WAITLIST_TITLE, error: JOBBER_WAITLIST_MESSAGE });
+    }
 
     const url = new URL("https://api.getjobber.com/api/oauth/authorize");
     url.searchParams.set("client_id", CLIENT_ID);
@@ -113,3 +136,38 @@ Deno.serve(async (req) => {
     return json({ error: String(e) }, 500);
   }
 });
+
+// Texts and emails Mark once per company on the waitlist (JOBBER_WAITLIST_MESSAGE promises they'll be contacted).
+// Sandbox and demo companies only log (tcNotify's guard) and claim nothing. The claim (jobber_waitlist.alerted_at) is
+// taken before sending and let go only when neither went out, so the next press tries again. Never throws: the
+// company sees the message either way.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function alertMark(admin: any, ownerId: string, claim: { used?: number; max?: number } | null) {
+  try {
+    const places = { used: claim?.used, max: claim?.max };
+    const ctx = await notifyCtx(admin, ownerId, "jobber-connect");
+    if (ctx.quiet) {
+      const quietMail = waitlistAlertEmail(places);
+      await sendSms(ADMIN_PHONE, waitlistAlertText(places), { ...ctx, kind: "JW1", role: "admin" });
+      await sendEmail(ADMIN_EMAIL, quietMail.subject, quietMail.html, { ...ctx, kind: "JW1", role: "admin" });
+      return;
+    }
+    const { data: claimed, error: claimError } = await admin
+      .from("jobber_waitlist").update({ alerted_at: new Date().toISOString() })
+      .eq("owner_id", ownerId).is("alerted_at", null).select("owner_id");
+    if (claimError) throw new Error(`alert claim failed: ${claimError.message}`);
+    if (!claimed || claimed.length === 0) return;
+
+    const { data: profile } = await admin
+      .from("profiles").select("full_name, company_name, phone, email").eq("id", ownerId).maybeSingle();
+    const company = { ...places, company: profile?.company_name, owner: profile?.full_name, phone: profile?.phone, email: profile?.email };
+    const mail = waitlistAlertEmail(company);
+    const [texted, emailed] = await Promise.all([
+      sendSms(ADMIN_PHONE, waitlistAlertText(company), { ...ctx, kind: "JW1", role: "admin" }),
+      sendEmail(ADMIN_EMAIL, mail.subject, mail.html, { ...ctx, kind: "JW1", role: "admin" }),
+    ]);
+    if (!texted && !emailed) await admin.from("jobber_waitlist").update({ alerted_at: null }).eq("owner_id", ownerId);
+  } catch (e) {
+    console.error("[jobber-connect] waitlist alert failed", String((e as Error)?.message ?? e).slice(0, 200));
+  }
+}

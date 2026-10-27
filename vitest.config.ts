@@ -11,6 +11,7 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    // The edge functions import zod as npm:zod@3 (Deno); tests of supabase/functions/_shared modules use the same zod.
+    alias: { "@": path.resolve(__dirname, "./src"), "npm:zod@3": "zod" },
   },
 });

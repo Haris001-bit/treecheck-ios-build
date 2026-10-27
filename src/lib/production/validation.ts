@@ -1,0 +1,48 @@
+/**
+ * Large-company setup: before a rate card is published, run it against real past jobs (five won, two lost) and show
+ * the difference. Only when the owner is comfortable does it go live. Pure.
+ */
+import type { RateCardDefinition } from './rules';
+import { priceWorkItem } from './pricing';
+import { r2 } from './answers';
+
+export interface ValidationRow {
+  id: string; label: string; outcome: 'won' | 'lost'; service: string; actualPrice: number;
+  enginePrice: number | null; diffPct: number | null; flag: 'ok' | 'review' | 'error'; note: string | null;
+}
+export interface ValidationResult {
+  rows: ValidationRow[];
+  summary: { won: number; lost: number; averageGapPct: number | null; review: number };
+  ready: boolean;
+  reason: string | null;
+}
+
+export const REVIEW_GAP = 0.1;
+
+export function validatePastJobs(def: RateCardDefinition, day: string): ValidationResult {
+  const rows: ValidationRow[] = def.validation.jobs.map((j) => {
+    const service = def.services.find((s) => s.key === j.service);
+    if (!service) return { id: j.id, label: j.label, outcome: j.outcome, service: j.service, actualPrice: j.actualPrice, enginePrice: null, diffPct: null, flag: 'error', note: 'Service not in this rate card' };
+    const r = priceWorkItem(def, { ...service, offered: true, sellMonths: undefined }, j.answers, { day });
+    if (r.kind !== 'ok') {
+      const note = r.kind === 'missing' ? `Missing: ${r.missing.join(', ')}` : r.reason;
+      return { id: j.id, label: j.label, outcome: j.outcome, service: service.name, actualPrice: j.actualPrice, enginePrice: null, diffPct: null, flag: 'error', note };
+    }
+    const diff = j.actualPrice > 0 ? r2((r.engineAmount - j.actualPrice) / j.actualPrice) : null;
+    return {
+      id: j.id, label: j.label, outcome: j.outcome, service: service.name, actualPrice: j.actualPrice, enginePrice: r.engineAmount,
+      diffPct: diff, flag: diff !== null && Math.abs(diff) <= REVIEW_GAP ? 'ok' : 'review', note: null,
+    };
+  });
+  const won = rows.filter((r) => r.outcome === 'won').length;
+  const lost = rows.filter((r) => r.outcome === 'lost').length;
+  const gaps = rows.filter((r) => r.diffPct !== null).map((r) => Math.abs(r.diffPct as number));
+  const skipped = def.validation.skippedReason?.trim() || null;
+  const enough = won >= 5 && lost >= 2;
+  return {
+    rows,
+    summary: { won, lost, averageGapPct: gaps.length ? r2(gaps.reduce((s, g) => s + g, 0) / gaps.length) : null, review: rows.filter((r) => r.flag !== 'ok').length },
+    ready: enough || !!skipped,
+    reason: enough ? null : skipped ? `Skipped: ${skipped}` : `Add ${[won < 5 ? `${5 - won} more won` : '', lost < 2 ? `${2 - lost} more lost` : ''].filter(Boolean).join(' and ')} ${won < 4 || lost < 1 ? 'jobs' : 'job'}, or give a reason to skip.`,
+  };
+}

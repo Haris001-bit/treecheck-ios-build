@@ -2,9 +2,9 @@ import { Link, Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Building2, HardHat, ArrowRight, ShieldCheck } from 'lucide-react';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import { useAuth } from '@/lib/auth';
-import { isNativeStoreBilling } from '@/lib/platform';
+import { isNativeStoreBilling, isStrictSafeMode } from '@/lib/platform';
 import { plansOpenOnWeb, useBillingRollout } from '@/hooks/useBillingRollout';
 import { planPrice } from '@/lib/pricing/planChoice';
 import { formatCents } from '@/lib/pricing/catalog';
@@ -19,7 +19,10 @@ export default function Index() {
   const coreScout = formatCents(planPrice({ ownerScout: true, interval: 'month' }));
   if (loading) return <div className="min-h-screen bg-background" />;
   if (user) return <Navigate to="/dashboard" replace />;
-  if (isNativeStoreBilling()) return <Navigate to="/login" replace />;
+  // The signup page is the first screen on the website and in the phone apps; it routes subcontractors to their own setup.
+  // The strict App Store review mode has no signup, so it keeps the sign-in screen.
+  if (isStrictSafeMode()) return <Navigate to="/login" replace />;
+  if (isNativeStoreBilling() || !new URLSearchParams(window.location.search).has('choose')) return <Navigate to="/start-trial" replace />;
   return <main className="min-h-screen bg-background">
     <header className="max-w-6xl mx-auto px-5 py-5 flex items-center justify-between"><img src={treecheckLogo} alt="TreeCheck" className="h-10 w-auto"/><Button asChild variant="outline"><Link to="/login">Sign in</Link></Button></header>
     <section className="max-w-5xl mx-auto px-5 pt-12 pb-20 text-center"><h1 className="text-4xl sm:text-6xl font-black">TreeCheck</h1><p className="text-lg sm:text-xl text-muted-foreground mt-4 max-w-2xl mx-auto">Choose the experience built for how you work.</p>

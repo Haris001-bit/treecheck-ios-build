@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import treecheckLogo from "@/assets/treecheck-logo-dark.png";
+import treecheckLogo from "@/assets/treecheck-white-login.png";
 import { GetTheApp } from "@/components/GetTheApp";
 import { detectStoreDevice, storeRedirectFor } from "@/lib/app-stores";
 

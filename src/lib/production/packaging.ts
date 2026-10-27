@@ -1,0 +1,108 @@
+/**
+ * Large-company setup: an approved proposal becomes production packets, one per package (removal, stump, planting,
+ * PHC...), each with its scope per tree, crew, hours, resources, tasks and dependencies. Packets never carry a price:
+ * crew leaders read them. Pure.
+ */
+import { packageOf, type Answers, type PackageKey, type RateCardDefinition, type SchedulingClass, type Service } from './rules';
+import type { ProductionEstimate } from './productionRules';
+import type { PlaybookResult, TaskSpec } from './playbooks';
+import { answerStr, r2 } from './answers';
+
+export interface PacketItemInput {
+  id: string;
+  service: Service;
+  answers: Answers;
+  production: ProductionEstimate;
+  treeLabel?: string | null;
+  location?: string | null;
+  photos?: string[];
+  flags?: Record<string, string>;
+}
+
+export interface PacketScope {
+  workItemId: string; tree: string | null; service: string; scope: string; hours: number; crewTemplate: string | null;
+  equipment: string[]; access: string | null; gate: string | null; disposal: string | null; utility: string | null;
+  vendor: string | null; hazards: string | null; location: string | null; photos: string[];
+}
+
+export interface PacketSpec {
+  packageKey: PackageKey;
+  title: string;
+  fulfillment: 'internal' | 'subcontractor' | 'vendor' | 'hybrid';
+  scope: PacketScope[];
+  crew: { template: string | null; headcount: number };
+  estHours: number;
+  estCrewHours: number;
+  estManHours: number;
+  resources: { key: string; hours: number }[];
+  schedulingClass: SchedulingClass;
+  dependsOn: PackageKey[];
+  tasks: { key: string; kind: string; title: string; due: TaskSpec['due']; status: 'open' }[];
+}
+
+const TITLES: Record<PackageKey, string> = {
+  removal: 'Removal', pruning: 'Pruning', stump: 'Stump grinding', cabling: 'Cabling and bracing',
+  planting: 'Planting', phc: 'Plant health care', other: 'Other work',
+};
+const ORDER: PackageKey[] = ['removal', 'pruning', 'stump', 'cabling', 'planting', 'phc', 'other'];
+const AFTER: Partial<Record<PackageKey, PackageKey[]>> = { stump: ['removal'], planting: ['removal', 'stump'] };
+
+/** Short plain scope from the answers, for the crew: "32 in DBH, rear yard access, lift, mini skid". */
+export function scopeText(service: Service, a: Answers): string {
+  const bits: string[] = [];
+  for (const q of service.questions) {
+    if (q.key === 'crew' || q.key === 'hours') continue;
+    const v = a[q.key];
+    if (v === null || v === undefined || v === '' || v === false) continue;
+    if (q.kind === 'yes_no') { if (v === true || String(v).toLowerCase() === 'yes') bits.push(q.label.toLowerCase()); continue; }
+    if (q.kind === 'choice') { const c = q.choices?.find((x) => x.value === String(v)); bits.push(`${q.label.toLowerCase()}: ${(c?.label ?? String(v)).toLowerCase()}`); continue; }
+    bits.push(`${v}${q.unit ? ` ${q.unit}` : ''} ${q.label.toLowerCase()}`.trim());
+  }
+  const head = service.customerText?.trim() || service.name;
+  return bits.length ? `${head}: ${bits.join(', ')}` : head;
+}
+
+export function planPackets(def: RateCardDefinition, items: PacketItemInput[], playbook: PlaybookResult): PacketSpec[] {
+  const groups = new Map<PackageKey, PacketItemInput[]>();
+  for (const it of items) {
+    const k = packageOf(it.service);
+    groups.set(k, [...(groups.get(k) ?? []), it]);
+  }
+  const keys = ORDER.filter((k) => groups.has(k));
+  const packets: PacketSpec[] = keys.map((k) => {
+    const its = groups.get(k)!;
+    const kinds = new Set(its.map((i) => i.service.fulfillment ?? 'internal'));
+    const fulfillment = kinds.size === 1 ? [...kinds][0] : 'hybrid';
+    const lead = [...its].sort((x, y) => y.production.headcount - x.production.headcount)[0];
+    const resources = new Map<string, number>();
+    for (const it of its) for (const e of it.production.equipment) resources.set(e.key, r2((resources.get(e.key) ?? 0) + e.hours));
+    const estHours = r2(its.reduce((s, i) => s + i.production.hours, 0));
+    const ids = new Set(its.map((i) => i.id));
+    return {
+      packageKey: k,
+      title: TITLES[k],
+      fulfillment,
+      scope: its.map((it) => ({
+        workItemId: it.id, tree: it.treeLabel ?? null, service: it.service.name, scope: scopeText(it.service, it.answers),
+        hours: it.production.hours, crewTemplate: it.production.crewTemplate, equipment: it.production.equipment.map((e) => e.key),
+        access: answerStr(it.answers, 'access'), gate: answerStr(it.answers, 'gate_code'), disposal: answerStr(it.answers, 'debris'),
+        utility: it.flags?.utility_requirement ?? null, vendor: it.flags?.equipment_requirement ?? null,
+        hazards: answerStr(it.answers, 'hazards'), location: it.location ?? null, photos: it.photos ?? [],
+      })),
+      crew: { template: lead.production.crewTemplate, headcount: lead.production.headcount },
+      estHours,
+      estCrewHours: estHours,
+      estManHours: r2(its.reduce((s, i) => s + i.production.manHours, 0)),
+      resources: [...resources].map(([key, hours]) => ({ key, hours })),
+      schedulingClass: playbook.schedulingClass,
+      dependsOn: (AFTER[k] ?? []).filter((d) => groups.has(d)),
+      tasks: playbook.tasks.filter((t) => t.itemIds.some((id) => ids.has(id)))
+        .map((t) => ({ key: t.key, kind: t.kind, title: t.title, due: t.due, status: 'open' as const })),
+    };
+  });
+  // A task that matched no item in any packet (for example a flag-only rule) goes on the first packet.
+  const placed = new Set(packets.flatMap((p) => p.tasks.map((t) => t.key)));
+  const loose = playbook.tasks.filter((t) => !placed.has(t.key));
+  if (packets.length && loose.length) packets[0].tasks.push(...loose.map((t) => ({ key: t.key, kind: t.kind, title: t.title, due: t.due, status: 'open' as const })));
+  return packets;
+}

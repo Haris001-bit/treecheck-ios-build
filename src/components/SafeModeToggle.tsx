@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { useLocation } from "react-router-dom";
 
 /**
  * Floating dev toggle to preview the iOS App Store Safe Mode in the web preview.
@@ -7,6 +8,7 @@ import { Capacitor } from "@capacitor/core";
  */
 export function SafeModeToggle() {
   const [on, setOn] = useState(false);
+  const { pathname } = useLocation();
 
   useEffect(() => {
     try {
@@ -14,12 +16,17 @@ export function SafeModeToggle() {
     } catch {}
   }, []);
 
-  // Hide on real native iOS — Safe Mode is always on there.
+  // Hide in the phone apps (iPhone and Android): this is a developer preview switch, never for customers.
   try {
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios") {
+    if (Capacitor.isNativePlatform()) {
       return null;
     }
   } catch {}
+
+  // Hide on the public signup pages so the preview matches what customers see.
+  if (typeof window !== "undefined" && /^\/(start-trial|giveaway|$)/.test(pathname)) {
+    return null;
+  }
 
   // Hide on the public production domain to avoid confusing real contractors.
   if (typeof window !== "undefined" && ["trccai.lovable.app", "app.treecheck.ai"].includes(window.location.hostname)) {

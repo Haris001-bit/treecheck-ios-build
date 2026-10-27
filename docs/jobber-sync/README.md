@@ -149,6 +149,7 @@ Message ids such as M16 are defined in `messages.md`.
 - Jobber data reaches the pure modules through small input types, never as raw GraphQL results. The PR that adds each query maps Jobber's reply into them, once Step 0's introspection confirms the field names.
 - From Financial Pulse's `_shared/jobber.ts`, TreeCheck imports only `getJobberToken`, `JobberGraphqlError`, `JobberReconnectRequired`, `JOBBER_GRAPHQL_URL` and `ownerIdOf`. `guards.test.ts` checks that all five still exist, and that no new module imports any other name from `jobber.ts`, imports all of it, or imports anything from `_shared/pulse/`. Only `jobberApi.ts` uses Jobber's address.
 - GraphQL documents are split by consumer (`jobberQueries.<consumer>.ts`), so a later PR never changes the webhook's import graph. That graph is frozen after PR 3.
+- The large-company setup (2026-10-26) follows the same rule: `jobberQueries.production.ts` and `productionJobber.ts` are reached from jobber-webhook only through the `production-jobber` function, called over HTTP with the service key after a one-query check, so the webhook imports none of them.
 - The web app imports no `_shared` file, so no shared change needs a Publish.
 
 **In the repo after PR 1.** Nothing deployed imports them yet.

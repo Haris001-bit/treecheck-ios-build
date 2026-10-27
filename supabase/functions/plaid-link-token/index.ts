@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     if ((live ?? 0) >= access.max_items) {
       return fail("company_limit", "Your company has reached its number of bank connections.");
     }
-    if (env === "production") {
+    if (env === "production" && PRODUCTION_SLOT_CAP !== null) {
       const { data: used, error: uErr } = await admin.rpc("plaid_slots_used", { p_env: "production" });
       if (uErr) throw new Error(`slot count failed: ${uErr.message}`);
       if (Number(used ?? 0) >= PRODUCTION_SLOT_CAP) {

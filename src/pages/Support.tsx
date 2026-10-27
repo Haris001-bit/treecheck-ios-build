@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Mail, MessageSquare, HelpCircle } from "lucide-react";
-import treecheckLogo from "@/assets/treecheck-logo-dark.png";
+import treecheckLogo from "@/assets/treecheck-white-login.png";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Support() {

@@ -14,8 +14,12 @@ import { decryptToken, encryptToken, importTokenKey, keyCanaryOk, type Encrypted
 export type PlaidEnv = "sandbox" | "production";
 
 export const PLAID_API_VERSION = "2020-09-14";
-/** Production connections Pulse lets itself use on the 10-connection Trial: one is kept spare. */
-export const PRODUCTION_SLOT_CAP = 9;
+/**
+ * TreeCheck-wide limit on production bank connections, or null for none. Plaid approved the paid plan on
+ * 2026-10-26, which has no connection limit (each connection is billed). On the 10-connection Trial it was 9,
+ * so one stayed spare. plaid_reserve_slot skips the check when it is null.
+ */
+export const PRODUCTION_SLOT_CAP: number | null = null;
 /** How long a slot reservation made just before a token exchange stays live. */
 export const RESERVATION_MINUTES = 10;
 

@@ -1,0 +1,312 @@
+/**
+ * Large-company setup: the price of one work item and of a whole estimate. Pure and versioned (PRICING_ENGINE_VERSION).
+ * Order: strategy, then answer-based adjustments, then the workload profile, then the service minimum/maximum, then
+ * rounding, then any override by the salesperson (a material one needs a reason). The AI never prices anything: it
+ * only fills answers, and prices come from the company's published rules.
+ */
+import type { Answers, RateCardDefinition, Service } from './rules';
+import { productionFor, crewTemplateOf, headcountOf, type AnswerSource, type ProductionEstimate } from './productionRules';
+import { activeProfile, profilePercent, type ProfileSettings } from './profiles';
+import { answerNum, answerStr, answerYes, dollars, isAnswered, matches, r2, roundMoney } from './answers';
+
+export interface Recurring { monthly: number; months: number; visits: number; total: number; label: string }
+
+export type StrategyResult =
+  | { kind: 'ok'; amount: number; steps: string[]; recurring?: Recurring }
+  | { kind: 'missing'; missing: string[] }
+  | { kind: 'blocked'; reason: string };
+
+export interface StrategyContext { def: RateCardDefinition; production: ProductionEstimate }
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Not offered at all, or outside its selling months ("Sold only in March and September"). day = YYYY-MM-DD. */
+export function isOffered(s: Pick<Service, 'offered' | 'sellMonths'>, day: string): { kind: 'ok' } | { kind: 'not_offered'; reason: string } {
+  if (s.offered === false) return { kind: 'not_offered', reason: 'Not offered' };
+  const months = s.sellMonths ?? [];
+  if (months.length > 0) {
+    const m = Number(day.slice(5, 7));
+    if (!months.includes(m)) {
+      const names = [...months].sort((a, b) => a - b).map((x) => MONTHS[x - 1]);
+      const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+      return { kind: 'not_offered', reason: `Sold only in ${list}` };
+    }
+  }
+  return { kind: 'ok' };
+}
+
+/** The company's approved species for a site (planting). */
+export function recommendSpecies(s: Pick<Service, 'species'>, site: { type?: string | null; light?: string | null; moisture?: string | null }): string[] {
+  const out: string[] = [];
+  for (const r of s.species ?? []) {
+    if (site.type && r.type !== site.type) continue;
+    if (site.light && r.light.length > 0 && !r.light.includes(site.light as never)) continue;
+    if (site.moisture && r.moisture.length > 0 && !r.moisture.includes(site.moisture as never)) continue;
+    for (const sp of r.species) if (!out.includes(sp)) out.push(sp);
+  }
+  return out;
+}
+
+/** The decision an admin took on a contradiction (contradictions.ts keys), if any. */
+export const decisionOf = (def: RateCardDefinition, key: string) => def.decisions.find((d) => d.key === key)?.choice ?? null;
+
+export function evaluateStrategy(service: Service, a: Answers, ctx: StrategyContext): StrategyResult {
+  const st = service.strategy;
+  const need = (...keys: (string | undefined)[]) => keys.filter((k): k is string => !!k && !isAnswered(a, k));
+  const qty = (k?: string) => (k && isAnswered(a, k) ? Math.max(0, answerNum(a, k) ?? 0) : 1);
+  switch (st.kind) {
+    case 'fixed':
+      return { kind: 'ok', amount: st.price, steps: [`Fixed price ${dollars(st.price)}`] };
+    case 'per_unit': {
+      const m = need(st.unitQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const q = qty(st.unitQuestion);
+      return { kind: 'ok', amount: r2(q * st.unitPrice), steps: [`${q} × ${dollars(st.unitPrice)} = ${dollars(q * st.unitPrice)}`] };
+    }
+    case 'threshold': {
+      const m = need(st.question); if (m.length) return { kind: 'missing', missing: m };
+      const v = answerNum(a, st.question) ?? 0;
+      const bands = [...st.bands].sort((x, y) => (x.upTo ?? Infinity) - (y.upTo ?? Infinity));
+      const band = bands.find((b) => b.upTo === null || v <= b.upTo);
+      if (!band) return { kind: 'blocked', reason: `No price set above ${bands[bands.length - 1].upTo}` };
+      const prev = bands[bands.indexOf(band) - 1];
+      const q = qty(st.quantityQuestion);
+      const where = band.upTo === null ? `above ${prev?.upTo ?? 0}` : `up to ${band.upTo}`;
+      return { kind: 'ok', amount: r2(band.price * q), steps: [`${v} is ${where}: ${dollars(band.price)}${q !== 1 ? ` × ${q}` : ''}`] };
+    }
+    case 'first_additional': {
+      const m = need(st.unitQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const q = Math.max(1, Math.round(qty(st.unitQuestion)));
+      const amt = st.first + Math.max(0, q - 1) * st.additional;
+      return { kind: 'ok', amount: r2(amt), steps: [`First ${dollars(st.first)}${q > 1 ? ` + ${q - 1} × ${dollars(st.additional)}` : ''} = ${dollars(amt)}`] };
+    }
+    case 'measurement': {
+      const m = need(st.question); if (m.length) return { kind: 'missing', missing: m };
+      const v = answerNum(a, st.question) ?? 0;
+      let rate = st.perUnit;
+      let why = '';
+      const variant = (st.variants ?? []).find((x) => matches(x.when, a));
+      if (variant) {
+        if (variant.range) {
+          const { low, high, rule } = variant.range;
+          if (rule === null) return { kind: 'blocked', reason: `${dollars(low)} to ${dollars(high)} has no rule yet` };
+          if (rule === 'ask') {
+            if (!variant.rateQuestion || !isAnswered(a, variant.rateQuestion)) return { kind: 'missing', missing: [variant.rateQuestion ?? 'rate'] };
+            rate = Math.min(high, Math.max(low, answerNum(a, variant.rateQuestion) ?? low));
+          } else rate = rule === 'low' ? low : rule === 'high' ? high : r2((low + high) / 2);
+        } else if (variant.perUnit !== undefined) rate = variant.perUnit;
+        why = ' (variant)';
+      }
+      const q = qty(st.quantityQuestion);
+      const amt = v * rate * q;
+      return { kind: 'ok', amount: r2(amt), steps: [`${v} × ${dollars(rate)}${why}${q !== 1 ? ` × ${q}` : ''} = ${dollars(amt)}`] };
+    }
+    case 'time_block': {
+      const m = need(st.minutesQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const minutes = Math.max(0, answerNum(a, st.minutesQuestion) ?? 0);
+      const blocks = Math.max(1, Math.ceil(minutes / st.blockMinutes - 1e-9));
+      const amt = blocks * st.blockPrice;
+      return { kind: 'ok', amount: r2(amt), steps: [`${blocks} × ${st.blockMinutes} min at ${dollars(st.blockPrice)} = ${dollars(amt)}`] };
+    }
+    case 'per_dbh': {
+      const m = need(st.dbhQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const dbh = answerNum(a, st.dbhQuestion) ?? 0;
+      const trees = st.treesQuestion ? Math.max(1, Math.round(qty(st.treesQuestion))) : 1;
+      const raw = dbh * st.perInch;
+      const perTree = Math.max(st.perTreeMinimum ?? 0, raw);
+      const steps = [`${dbh}" × ${dollars(st.perInch)} = ${dollars(raw)}`];
+      if (perTree > raw) steps.push(`Per-tree minimum ${dollars(perTree)}`);
+      if (trees > 1) steps.push(`${trees} trees × ${dollars(perTree)}`);
+      return { kind: 'ok', amount: r2(perTree * trees), steps };
+    }
+    case 'matrix': {
+      const m = need(st.rowQuestion, st.colQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const row = answerStr(a, st.rowQuestion) as string;
+      const col = st.colQuestion ? answerStr(a, st.colQuestion) : null;
+      const price = st.cells[col ? `${row}|${col}` : row];
+      if (price === null || price === undefined) return { kind: 'blocked', reason: 'Not offered in that size' };
+      const q = qty(st.quantityQuestion);
+      const rl = st.rows.find((r) => r.value === row)?.label ?? row;
+      const cl = col ? st.cols?.find((c) => c.value === col)?.label ?? col : '';
+      return { kind: 'ok', amount: r2(price * q), steps: [`${rl}${cl ? `, ${cl}` : ''}: ${dollars(price)}${q !== 1 ? ` × ${q}` : ''}`] };
+    }
+    case 'height': {
+      const m = need(st.heightQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const raw = answerNum(a, st.heightQuestion) ?? 0;
+      const h = st.maxHeight !== undefined ? Math.min(raw, st.maxHeight) : raw;
+      let each = h * st.perFoot;
+      if (st.maxPrice !== undefined) each = Math.min(each, st.maxPrice);
+      const q = qty(st.quantityQuestion);
+      return { kind: 'ok', amount: r2(each * q), steps: [`${h} ft × ${dollars(st.perFoot)} = ${dollars(each)}${q !== 1 ? ` × ${q}` : ''}`] };
+    }
+    case 'crew_time': {
+      const m = need(st.crewQuestion, st.hoursQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const t = crewTemplateOf(ctx.def, answerStr(a, st.crewQuestion));
+      if (!t) return { kind: 'blocked', reason: 'Pick a crew' };
+      const hours = ctx.production.hours;
+      const head = headcountOf(t);
+      if (ctx.def.pricing.method === 'cost_plus') {
+        const d = ctx.def.pricing.derivedRates;
+        if (!d) return { kind: 'blocked', reason: 'Selling rates are worked out when the rate card is published' };
+        let amt = 0;
+        const missingRates: string[] = [];
+        for (const c of ctx.production.crew) {
+          const rate = d.roles[c.roleKey];
+          if (rate === undefined) missingRates.push(c.roleKey); else amt += c.count * c.hours * rate;
+        }
+        for (const e of ctx.production.equipment) {
+          const rate = d.equipment[e.key];
+          if (rate === undefined) missingRates.push(e.key); else amt += e.hours * rate;
+        }
+        if (ctx.production.loads > 0 && d.disposalPerLoad) amt += ctx.production.loads * d.disposalPerLoad;
+        if (missingRates.length) return { kind: 'blocked', reason: `No cost set for ${missingRates.join(', ')}` };
+        return { kind: 'ok', amount: r2(amt), steps: [`${t.name}, ${hours} hr at pay plus target return = ${dollars(amt)}`] };
+      }
+      const rate = t.manHourRate ?? ctx.def.pricing.manHourRate;
+      if (!rate) return { kind: 'blocked', reason: 'No man-hour rate set' };
+      const base = head * hours * rate;
+      const steps = [`${head} × ${hours} hr × ${dollars(rate)} = ${dollars(base)}`];
+      let amt = base;
+      const floors = (st.floors ?? []).filter((f) => hours >= f.minHours && (f.headcount === undefined || f.headcount === head));
+      const floor = floors.sort((x, y) => y.price - x.price)[0];
+      if (floor) {
+        const choice = decisionOf(ctx.def, `day_vs_rate:${service.key}:${floor.key}`);
+        if (choice === 'day_price') { amt = floor.price; steps.push(`Day price ${dollars(floor.price)}`); }
+        else if (choice !== 'rate' && floor.price > amt) { amt = floor.price; steps.push(`Day floor ${dollars(floor.price)}`); }
+      }
+      for (const ad of st.equipmentAdders ?? []) {
+        if (!answerYes(a, ad.question)) continue;
+        const add = (ad.perHour ?? 0) * hours + (ad.perJob ?? 0);
+        if (add > 0) { amt += add; steps.push(`+ ${ad.equipment.replace(/_/g, ' ')} ${dollars(add)}`); }
+      }
+      return { kind: 'ok', amount: r2(amt), steps };
+    }
+    case 'recurring_plan': {
+      const m = need(st.classQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const cls = st.classes.find((c) => c.value === answerStr(a, st.classQuestion));
+      if (!cls) return { kind: 'blocked', reason: 'Pick a plan class' };
+      const total = r2(cls.initial + cls.monthly * cls.months);
+      return {
+        kind: 'ok', amount: cls.initial,
+        steps: [`${cls.label}: ${dollars(cls.initial)} to start${cls.months ? `, then ${dollars(cls.monthly)} a month for ${cls.months} months` : ''}`],
+        recurring: { monthly: cls.monthly, months: cls.months, visits: cls.visits, total, label: cls.label },
+      };
+    }
+    case 'sub_bid': {
+      const m = need(st.costQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const cost = answerNum(a, st.costQuestion) ?? 0;
+      const amt = Math.round(cost / (1 - st.margin));
+      return { kind: 'ok', amount: amt, steps: [`Sub price ${dollars(cost)} at ${Math.round(st.margin * 100)}% margin = ${dollars(amt)}`] };
+    }
+    case 'manual': {
+      const m = need(st.priceQuestion); if (m.length) return { kind: 'missing', missing: m };
+      const p = Math.max(0, answerNum(a, st.priceQuestion) ?? 0);
+      return { kind: 'ok', amount: r2(p), steps: [`Priced by hand ${dollars(p)}`] };
+    }
+  }
+}
+
+export interface WorkItemQuote {
+  kind: 'ok';
+  serviceKey: string;
+  engineAmount: number;
+  steps: string[];
+  minimumApplied: boolean;
+  maximumApplied: boolean;
+  profile: { key: string | null; percent: number };
+  recurring?: Recurring;
+  production: ProductionEstimate;
+  flags: Record<string, string>;
+}
+export type WorkItemResult =
+  | WorkItemQuote
+  | { kind: 'missing'; missing: string[]; production: ProductionEstimate }
+  | { kind: 'blocked'; reason: string; production: ProductionEstimate }
+  | { kind: 'not_offered'; reason: string };
+
+export interface WorkItemOptions { day: string; settings?: ProfileSettings | null; sources?: Record<string, AnswerSource> }
+
+export function flagsFor(service: Service, a: Answers): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of service.flags ?? []) if (matches(f.when, a)) out[f.flag] = f.value;
+  return out;
+}
+
+export function priceWorkItem(def: RateCardDefinition, service: Service, a: Answers, opts: WorkItemOptions): WorkItemResult {
+  const offered = isOffered(service, opts.day);
+  if (offered.kind === 'not_offered') return offered;
+  const production = productionFor(def, service, a, opts.sources);
+  const required = service.questions.filter((q) => q.required && !isAnswered(a, q.key)).map((q) => q.key);
+  if (required.length) return { kind: 'missing', missing: required, production };
+  const st = evaluateStrategy(service, a, { def, production });
+  if (st.kind === 'missing') return { kind: 'missing', missing: st.missing, production };
+  if (st.kind === 'blocked') return { kind: 'blocked', reason: st.reason, production };
+  let amt = st.amount;
+  const steps = [...st.steps];
+  for (const adj of service.adjustments ?? []) {
+    if (!matches(adj.when, a)) continue;
+    const add = (adj.percent ? amt * adj.percent / 100 : 0) + (adj.amount ?? 0);
+    if (add !== 0) { amt += add; steps.push(`${adj.label} ${add > 0 ? '+' : ''}${dollars(add)}`); }
+  }
+  const profile = activeProfile(def, opts.settings, opts.day);
+  const pct = profilePercent(profile, service);
+  if (pct !== 0) { amt = amt * (1 + pct / 100); steps.push(`${profile?.name ?? 'Profile'} ${pct > 0 ? '+' : ''}${pct}%`); }
+  let minimumApplied = false;
+  let maximumApplied = false;
+  if (service.minimum !== undefined && amt < service.minimum) { amt = service.minimum; minimumApplied = true; steps.push(`Minimum ${dollars(service.minimum)}`); }
+  if (service.maximum !== undefined && amt > service.maximum) { amt = service.maximum; maximumApplied = true; steps.push(`Maximum ${dollars(service.maximum)}`); }
+  const rounding = def.policies.rounding;
+  amt = roundMoney(Math.max(0, amt), rounding?.to ?? 1, rounding?.mode ?? 'nearest');
+  return {
+    kind: 'ok', serviceKey: service.key, engineAmount: amt, steps, minimumApplied, maximumApplied,
+    profile: { key: profile?.key ?? null, percent: pct }, recurring: st.recurring, production, flags: flagsFor(service, a),
+  };
+}
+
+/** A change of at least 5% or $50 (whichever is bigger) is material and needs a reason. */
+export function isMaterialOverride(engineAmount: number, sell: number): boolean {
+  return Math.abs(sell - engineAmount) >= Math.max(0.05 * Math.abs(engineAmount), 50);
+}
+
+export type OverrideResult =
+  | { kind: 'ok'; price: number; override: null | { from: number; to: number; reason: string | null; material: boolean } }
+  | { kind: 'needs_reason'; direction: 'lower' | 'higher' };
+
+export function applyOverride(engineAmount: number, sell: number | null | undefined, reason?: string | null): OverrideResult {
+  if (sell === null || sell === undefined || !Number.isFinite(sell) || r2(sell) === r2(engineAmount)) {
+    return { kind: 'ok', price: engineAmount, override: null };
+  }
+  const to = r2(Math.max(0, sell));
+  const material = isMaterialOverride(engineAmount, to);
+  const why = reason?.trim() || null;
+  if (material && !why) return { kind: 'needs_reason', direction: to < engineAmount ? 'lower' : 'higher' };
+  return { kind: 'ok', price: to, override: { from: engineAmount, to, reason: why, material } };
+}
+
+export type LineKind = 'required' | 'recommended' | 'optional';
+export interface PricedLine { id: string; price: number; kind: LineKind; selected?: boolean | null; recurring?: Recurring }
+export interface EstimateTotals {
+  subtotal: number;
+  optionalTotal: number;
+  discount: { key: string; label: string; percent: number; amount: number } | null;
+  total: number;
+  deposit: { key: string; label: string; percent: number; amount: number } | null;
+  recurringTotal: number;
+}
+
+/**
+ * Totals. Before approval, recommended items count as pre-selected and optional ones don't; after approval,
+ * what the customer selected counts (required items always).
+ */
+export function estimateTotals(def: RateCardDefinition, lines: PricedLine[], opts: { discountKey?: string | null; paymentPlanKey?: string | null; approved?: boolean } = {}): EstimateTotals {
+  const counts = (l: PricedLine) => l.kind === 'required'
+    || (opts.approved ? l.selected === true : l.kind === 'recommended' ? l.selected !== false : l.selected === true);
+  const subtotal = r2(lines.filter(counts).reduce((s, l) => s + l.price, 0));
+  const optionalTotal = r2(lines.filter((l) => !counts(l)).reduce((s, l) => s + l.price, 0));
+  const d = opts.discountKey ? def.policies.discounts.find((x) => x.key === opts.discountKey) : undefined;
+  const discount = d ? { key: d.key, label: d.label, percent: d.percent, amount: r2(subtotal * d.percent / 100) } : null;
+  const total = r2(subtotal - (discount?.amount ?? 0));
+  const p = opts.paymentPlanKey ? def.policies.paymentPlans.find((x) => x.key === opts.paymentPlanKey) : undefined;
+  const deposit = p && p.depositPercent > 0 ? { key: p.key, label: p.label, percent: p.depositPercent, amount: r2(total * p.depositPercent / 100) } : null;
+  const recurringTotal = r2(lines.filter(counts).reduce((s, l) => s + (l.recurring ? l.recurring.total - l.price : 0), 0));
+  return { subtotal, optionalTotal, discount, total, deposit, recurringTotal };
+}

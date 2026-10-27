@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { useProductionConfig, keyFromName, type LaborRole, type EquipmentItem, type ProductionPricing } from '@/hooks/useProductionConfig';
 import { ConsultationNote } from '@/components/ConsultationNote';
 
-export function ProductionCostsForm() {
+/** withUnits: the large-company setup also prices materials and vendor fees per item or per job (production_equipment.unit). */
+export function ProductionCostsForm({ withUnits = false }: { withUnits?: boolean } = {}) {
   const { data, isLoading, save } = useProductionConfig();
   const [roles, setRoles] = useState<LaborRole[]>([]);
   const [equip, setEquip] = useState<EquipmentItem[]>([]);
@@ -57,7 +58,7 @@ export function ProductionCostsForm() {
       <Card className="p-4 space-y-3">
         <div>
           <div className="font-semibold">Equipment costs</div>
-          <div className="text-xs text-muted-foreground">Your estimated hourly operating cost for each machine.</div>
+          <div className="text-xs text-muted-foreground">{withUnits ? 'Your cost for each machine, material or outside vendor: per hour, per item, or per job.' : 'Your estimated hourly operating cost for each machine.'}</div>
         </div>
         {equip.map((r, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -67,7 +68,12 @@ export function ProductionCostsForm() {
               <Input type="number" inputMode="decimal" className="pl-5" value={r.hourly_cost}
                 onChange={(e) => setEquip(equip.map((x, j) => j === i ? { ...x, hourly_cost: Number(e.target.value) } : x))} aria-label={`${r.name} hourly cost`} />
             </div>
-            <span className="text-xs text-muted-foreground">/hr</span>
+            {withUnits ? (
+              <select className="h-9 rounded-md border bg-background px-1 text-xs" aria-label={`${r.name} priced per`} value={r.unit ?? 'hour'}
+                onChange={(e) => setEquip(equip.map((x, j) => j === i ? { ...x, unit: e.target.value as EquipmentItem['unit'] } : x))}>
+                <option value="hour">/hr</option><option value="each">each</option><option value="job">/job</option>
+              </select>
+            ) : <span className="text-xs text-muted-foreground">/hr</span>}
             <Button size="icon" variant="ghost" onClick={() => setEquip(equip.filter((_, j) => j !== i))} aria-label="Remove equipment"><Trash2 className="w-4 h-4" /></Button>
           </div>
         ))}

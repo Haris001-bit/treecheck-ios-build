@@ -619,6 +619,54 @@ export type Database = {
         }
         Relationships: []
       }
+      communication_consents: {
+        Row: {
+          channels: string[]
+          consent_text: string
+          consent_version: string
+          created_at: string
+          email: string | null
+          granted: boolean
+          id: string
+          ip: string | null
+          kind: string
+          phone: string | null
+          source: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          channels?: string[]
+          consent_text: string
+          consent_version: string
+          created_at?: string
+          email?: string | null
+          granted: boolean
+          id?: string
+          ip?: string | null
+          kind: string
+          phone?: string | null
+          source: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          channels?: string[]
+          consent_text?: string
+          consent_version?: string
+          created_at?: string
+          email?: string | null
+          granted?: boolean
+          id?: string
+          ip?: string | null
+          kind?: string
+          phone?: string | null
+          source?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       company_access_audit: {
         Row: {
           action: string
@@ -1996,6 +2044,69 @@ export type Database = {
           },
         ]
       }
+      giveaway_entries: {
+        Row: {
+          company_name: string | null
+          consent_text: string | null
+          consent_version: string | null
+          country: string | null
+          created_at: string
+          drawn_at: string | null
+          email: string
+          full_name: string
+          giveaway: string
+          id: string
+          ip: string | null
+          phone: string | null
+          region: string | null
+          rules_version: string
+          source: string
+          status: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          consent_text?: string | null
+          consent_version?: string | null
+          country?: string | null
+          created_at?: string
+          drawn_at?: string | null
+          email: string
+          full_name: string
+          giveaway: string
+          id?: string
+          ip?: string | null
+          phone?: string | null
+          region?: string | null
+          rules_version: string
+          source: string
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          consent_text?: string | null
+          consent_version?: string | null
+          country?: string | null
+          created_at?: string
+          drawn_at?: string | null
+          email?: string
+          full_name?: string
+          giveaway?: string
+          id?: string
+          ip?: string | null
+          phone?: string | null
+          region?: string | null
+          rules_version?: string
+          source?: string
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       home_ai_summaries: {
         Row: {
           contractor_id: string
@@ -2558,6 +2669,53 @@ export type Database = {
           },
         ]
       }
+      jobber_connect_attempts: {
+        Row: {
+          owner_id: string
+          started_at: string
+        }
+        Insert: {
+          owner_id: string
+          started_at?: string
+        }
+        Update: {
+          owner_id?: string
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobber_connect_attempts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobber_connect_limit: {
+        Row: {
+          chosen_owner_ids: string[]
+          id: boolean
+          max_accounts: number | null
+          open_to_all: boolean
+          test_owner_ids: string[]
+        }
+        Insert: {
+          chosen_owner_ids?: string[]
+          id?: boolean
+          max_accounts?: number | null
+          open_to_all?: boolean
+          test_owner_ids?: string[]
+        }
+        Update: {
+          chosen_owner_ids?: string[]
+          id?: boolean
+          max_accounts?: number | null
+          open_to_all?: boolean
+          test_owner_ids?: string[]
+        }
+        Relationships: []
+      }
       jobber_jobs: {
         Row: {
           billing_type: string | null
@@ -2894,6 +3052,35 @@ export type Database = {
             foreignKeyName: "jobber_visit_revenue_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobber_waitlist: {
+        Row: {
+          alerted_at: string | null
+          created_at: string
+          last_tried_at: string
+          owner_id: string
+        }
+        Insert: {
+          alerted_at?: string | null
+          created_at?: string
+          last_tried_at?: string
+          owner_id: string
+        }
+        Update: {
+          alerted_at?: string | null
+          created_at?: string
+          last_tried_at?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobber_waitlist_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -4129,6 +4316,7 @@ export type Database = {
           id: string
           name: string
           sort_order: number
+          unit: string
           updated_at: string
         }
         Insert: {
@@ -4139,6 +4327,7 @@ export type Database = {
           id?: string
           name: string
           sort_order?: number
+          unit?: string
           updated_at?: string
         }
         Update: {
@@ -4149,9 +4338,213 @@ export type Database = {
           id?: string
           name?: string
           sort_order?: number
+          unit?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      production_estimate_costs: {
+        Row: {
+          computed_at: string
+          contractor_id: string
+          created_at: string
+          estimate_id: string
+          items: Json
+          rates: Json
+          totals: Json
+          updated_at: string
+        }
+        Insert: {
+          computed_at?: string
+          contractor_id: string
+          created_at?: string
+          estimate_id: string
+          items?: Json
+          rates?: Json
+          totals?: Json
+          updated_at?: string
+        }
+        Update: {
+          computed_at?: string
+          contractor_id?: string
+          created_at?: string
+          estimate_id?: string
+          items?: Json
+          rates?: Json
+          totals?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_estimate_costs_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_estimate_costs_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: true
+            referencedRelation: "production_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_estimates: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_via: string | null
+          backlog_weeks_at_sale: number | null
+          backlog_weeks_at_send: number | null
+          branch_key: string | null
+          completed_at: string | null
+          consultation: Json | null
+          contractor_id: string
+          created_at: string
+          created_by: string | null
+          customer: Json
+          id: string
+          jobber_client_id: string | null
+          jobber_property_id: string | null
+          jobber_quote_id: string | null
+          jobber_quote_number: string | null
+          lost_at: string | null
+          lost_reason: string | null
+          number: number
+          payment_plan: Json | null
+          pricing_engine_version: string
+          production_engine_version: string
+          profile: string
+          promised_window: Json | null
+          quote_claimed_at: string | null
+          quote_error: string | null
+          quote_state: string | null
+          rate_card_id: string
+          rate_card_version: number | null
+          revision_of: string | null
+          salesperson_id: string | null
+          sent_at: string | null
+          sent_snapshot: Json | null
+          status: string
+          totals: Json
+          trees: Json
+          updated_at: string
+          work_items: Json
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_via?: string | null
+          backlog_weeks_at_sale?: number | null
+          backlog_weeks_at_send?: number | null
+          branch_key?: string | null
+          completed_at?: string | null
+          consultation?: Json | null
+          contractor_id: string
+          created_at?: string
+          created_by?: string | null
+          customer?: Json
+          id?: string
+          jobber_client_id?: string | null
+          jobber_property_id?: string | null
+          jobber_quote_id?: string | null
+          jobber_quote_number?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          number: number
+          payment_plan?: Json | null
+          pricing_engine_version: string
+          production_engine_version: string
+          profile?: string
+          promised_window?: Json | null
+          quote_claimed_at?: string | null
+          quote_error?: string | null
+          quote_state?: string | null
+          rate_card_id: string
+          rate_card_version?: number | null
+          revision_of?: string | null
+          salesperson_id?: string | null
+          sent_at?: string | null
+          sent_snapshot?: Json | null
+          status?: string
+          totals?: Json
+          trees?: Json
+          updated_at?: string
+          work_items?: Json
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_via?: string | null
+          backlog_weeks_at_sale?: number | null
+          backlog_weeks_at_send?: number | null
+          branch_key?: string | null
+          completed_at?: string | null
+          consultation?: Json | null
+          contractor_id?: string
+          created_at?: string
+          created_by?: string | null
+          customer?: Json
+          id?: string
+          jobber_client_id?: string | null
+          jobber_property_id?: string | null
+          jobber_quote_id?: string | null
+          jobber_quote_number?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          number?: number
+          payment_plan?: Json | null
+          pricing_engine_version?: string
+          production_engine_version?: string
+          profile?: string
+          promised_window?: Json | null
+          quote_claimed_at?: string | null
+          quote_error?: string | null
+          quote_state?: string | null
+          rate_card_id?: string
+          rate_card_version?: number | null
+          revision_of?: string | null
+          salesperson_id?: string | null
+          sent_at?: string | null
+          sent_snapshot?: Json | null
+          status?: string
+          totals?: Json
+          trees?: Json
+          updated_at?: string
+          work_items?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_estimates_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_estimates_rate_card_id_fkey"
+            columns: ["rate_card_id"]
+            isOneToOne: false
+            referencedRelation: "production_rate_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_estimates_revision_of_fkey"
+            columns: ["revision_of"]
+            isOneToOne: false
+            referencedRelation: "production_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_estimates_salesperson_id_fkey"
+            columns: ["salesperson_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       production_labor_roles: {
         Row: {
@@ -4185,6 +4578,130 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      production_packets: {
+        Row: {
+          actuals: Json | null
+          bid_request_id: string | null
+          completed_at: string | null
+          contractor_id: string
+          created_at: string
+          crew: Json
+          crew_leader_id: string | null
+          customer: Json
+          depends_on: string[]
+          est_crew_hours: number | null
+          est_hours: number | null
+          est_man_hours: number | null
+          estimate_id: string
+          estimate_number: number | null
+          fulfillment: string
+          id: string
+          jobber_job_id: string | null
+          jobber_job_number: string | null
+          package_key: string
+          planned_date: string | null
+          promised_window: Json | null
+          rate_card_version: number | null
+          resources: Json
+          salesperson_name: string | null
+          scheduled_date: string | null
+          scheduling_class: string
+          scope: Json
+          status: string
+          tasks: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          actuals?: Json | null
+          bid_request_id?: string | null
+          completed_at?: string | null
+          contractor_id: string
+          created_at?: string
+          crew?: Json
+          crew_leader_id?: string | null
+          customer?: Json
+          depends_on?: string[]
+          est_crew_hours?: number | null
+          est_hours?: number | null
+          est_man_hours?: number | null
+          estimate_id: string
+          estimate_number?: number | null
+          fulfillment?: string
+          id?: string
+          jobber_job_id?: string | null
+          jobber_job_number?: string | null
+          package_key: string
+          planned_date?: string | null
+          promised_window?: Json | null
+          rate_card_version?: number | null
+          resources?: Json
+          salesperson_name?: string | null
+          scheduled_date?: string | null
+          scheduling_class?: string
+          scope?: Json
+          status?: string
+          tasks?: Json
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          actuals?: Json | null
+          bid_request_id?: string | null
+          completed_at?: string | null
+          contractor_id?: string
+          created_at?: string
+          crew?: Json
+          crew_leader_id?: string | null
+          customer?: Json
+          depends_on?: string[]
+          est_crew_hours?: number | null
+          est_hours?: number | null
+          est_man_hours?: number | null
+          estimate_id?: string
+          estimate_number?: number | null
+          fulfillment?: string
+          id?: string
+          jobber_job_id?: string | null
+          jobber_job_number?: string | null
+          package_key?: string
+          planned_date?: string | null
+          promised_window?: Json | null
+          rate_card_version?: number | null
+          resources?: Json
+          salesperson_name?: string | null
+          scheduled_date?: string | null
+          scheduling_class?: string
+          scope?: Json
+          status?: string
+          tasks?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_packets_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_packets_crew_leader_id_fkey"
+            columns: ["crew_leader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_packets_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "production_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       production_plans: {
         Row: {
@@ -4321,6 +4838,149 @@ export type Database = {
             columns: ["calibration_id"]
             isOneToOne: true
             referencedRelation: "production_calibrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_rate_cards: {
+        Row: {
+          based_on: string | null
+          branch_key: string | null
+          contractor_id: string
+          created_at: string
+          definition: Json
+          effective_from: string | null
+          id: string
+          label: string
+          pricing_engine_version: string | null
+          published_at: string | null
+          published_by: string | null
+          status: string
+          updated_at: string
+          version: number | null
+        }
+        Insert: {
+          based_on?: string | null
+          branch_key?: string | null
+          contractor_id: string
+          created_at?: string
+          definition?: Json
+          effective_from?: string | null
+          id?: string
+          label?: string
+          pricing_engine_version?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          updated_at?: string
+          version?: number | null
+        }
+        Update: {
+          based_on?: string | null
+          branch_key?: string | null
+          contractor_id?: string
+          created_at?: string
+          definition?: Json
+          effective_from?: string | null
+          id?: string
+          label?: string
+          pricing_engine_version?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          updated_at?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_rate_cards_based_on_fkey"
+            columns: ["based_on"]
+            isOneToOne: false
+            referencedRelation: "production_rate_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_rate_cards_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_rollout: {
+        Row: {
+          id: number
+          jobber_extras: boolean
+          live: boolean
+          test_owner_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          jobber_extras?: boolean
+          live?: boolean
+          test_owner_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          jobber_extras?: boolean
+          live?: boolean
+          test_owner_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      production_settings: {
+        Row: {
+          active_profile: string
+          basics: Json
+          contractor_id: string
+          cost_viewer_ids: string[]
+          created_at: string
+          crew_counts: Json
+          isa_credentials: Json
+          jobber: Json
+          profile_schedule: Json
+          resources: Json
+          send_unit_cost: boolean
+          updated_at: string
+        }
+        Insert: {
+          active_profile?: string
+          basics?: Json
+          contractor_id: string
+          cost_viewer_ids?: string[]
+          created_at?: string
+          crew_counts?: Json
+          isa_credentials?: Json
+          jobber?: Json
+          profile_schedule?: Json
+          resources?: Json
+          send_unit_cost?: boolean
+          updated_at?: string
+        }
+        Update: {
+          active_profile?: string
+          basics?: Json
+          contractor_id?: string
+          cost_viewer_ids?: string[]
+          created_at?: string
+          crew_counts?: Json
+          isa_credentials?: Json
+          jobber?: Json
+          profile_schedule?: Json
+          resources?: Json
+          send_unit_cost?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_settings_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5691,6 +6351,10 @@ export type Database = {
           closed_weekdays: number[]
         }[]
       }
+      jobber_claim_connect: {
+        Args: { p_owner: string; p_return_to: string; p_state: string }
+        Returns: Json
+      }
       jobber_claim_payments: {
         Args: { p_owner: string; p_seconds: number }
         Returns: string
@@ -5785,6 +6449,19 @@ export type Database = {
         Returns: string
       }
       plaid_take_resync: { Args: { p_item_row_id: string }; Returns: boolean }
+      production_can: {
+        Args: { p_layer: string; p_owner: string }
+        Returns: boolean
+      }
+      production_costs_open: {
+        Args: { p_owner: string; p_write: boolean }
+        Returns: boolean
+      }
+      production_has_key: {
+        Args: { p_key: string; p_owner: string }
+        Returns: boolean
+      }
+      production_status: { Args: never; Returns: Json }
       pulse_account_starts: { Args: { p_owner: string }; Returns: Json }
       pulse_apply_classifications: {
         Args: { p_owner: string; p_rows: Json }

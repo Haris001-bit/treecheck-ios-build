@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import { canUseStorePlans, isStrictSafeMode, storeName } from '@/lib/platform';
 import { AppStoreSafeWall } from '@/components/AppStoreSafeWall';
 import { Navigate } from 'react-router-dom';

@@ -2,12 +2,13 @@
 //
 // POST { public_token, metadata: { institution, accounts, link_session_id }, consent_version }
 // Caller: a company owner with Pulse switched on, whose session finished two-step sign-in.
-// On Plaid's free Trial every exchanged public token uses one of 10 connections forever, so the
-// order is strict (A7):
+// Every exchanged public token is a billed Plaid connection (on the old free Trial it used one of
+// 10 forever), so the order is strict (A7):
 // 1. The token key must work first: a connection is never made that cannot be stored.
 // 2. Refuse duplicate accounts (same mask and name as a live account), before anything is used up.
 // 3. Record the owner's consent (A14).
-// 4. Reserve under the database lock (plaid_reserve_slot): company limit, team cap, and "this bank
+// 4. Reserve under the database lock (plaid_reserve_slot): company limit, team cap (none while
+//    PRODUCTION_SLOT_CAP is null), and "this bank
 //    is already linked or being linked" (use Reconnect / Add accounts instead).
 // 5. Mark the ledger row 'exchanging' (counted, never expires) BEFORE calling Plaid, so an exchange
 //    whose outcome is unclear is always counted.

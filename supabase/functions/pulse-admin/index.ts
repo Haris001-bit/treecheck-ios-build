@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
         ok: true,
         secrets: secretPresence(),
         token_keys: keys,
-        production_connections: { used: Number(used ?? 0), cap: PRODUCTION_SLOT_CAP, trial_limit: 10 },
+        production_connections: { used: Number(used ?? 0), cap: PRODUCTION_SLOT_CAP, trial_limit: PRODUCTION_SLOT_CAP === null ? null : 10 },
         connections_needing_support: stuck ?? 0,
         redirect_uri_set: !!Deno.env.get("PLAID_REDIRECT_URI"),
       });

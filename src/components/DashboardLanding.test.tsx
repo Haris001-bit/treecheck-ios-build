@@ -30,7 +30,7 @@ describe('dashboard landing without a leads flash', () => {
   it('crew goes to jobs to bid even after Home was seen', () => {
     sessionStorage.setItem('home-seen-session', '1'); state.isCrewOnly = true; show(); expect(host.textContent).toContain('Crew test'); expect(state.mounts).not.toHaveBeenCalled();
   });
-  it('owners can still open Available Leads after Home', () => {
-    sessionStorage.setItem('home-seen-session', '1'); show(); expect(host.textContent).toContain('Available Leads test');
+  it('owners land on Home even after Home was already seen this session', () => {
+    sessionStorage.setItem('home-seen-session', '1'); show(); expect(host.textContent).toContain('Home test'); expect(state.mounts).not.toHaveBeenCalled();
   });
 });

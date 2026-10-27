@@ -1,6 +1,7 @@
 // Free iOS account registration (no Stripe). Body mirrors StartTrial fields without Checkout.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { parseConsent, recordConsent } from "../_shared/consent.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +29,10 @@ serve(async (req) => {
     if (!email || !password || !full_name || !company_name) {
       throw new Error("email, password, full_name, and company_name are required");
     }
+
+    // Older app builds send no consent; newer ones must agree to account messages. Marketing stays optional.
+    const consent = parseConsent(body?.consent);
+    if (consent && !consent.account) throw new Error("Check the box to agree to account messages about your account.");
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -57,6 +62,8 @@ serve(async (req) => {
       subscription_tier: "free",
       credit_balance: 0,
     }, { onConflict: "id" });
+
+    if (consent) await recordConsent(supabaseAdmin, req, userId, consent, { email, phone }, "app-signup");
 
     // Service area so the new account can see leads in their city.
     if (city && String(city).trim()) {

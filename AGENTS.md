@@ -16,6 +16,7 @@
 - Jobber switches in company_jobber_settings change only in the SQL editor by Haris, because each starts live Jobber writes or texts.
 - Never add price columns to bid_requests (prices live in bid_request_quotes), because invited subs can read every bid_requests column.
 - crm_interest_alerts has RLS on and no policies on purpose (only the crm-interest-alert function writes it); never add a policy or browser access, because it limits Mark to one text per company and CRM when an owner picks a CRM other than Jobber.
+- jobber_connect_limit, jobber_connect_attempts and jobber_waitlist have RLS on and no policies on purpose, jobber_claim_connect() is service_role only, and the settings change only in the SQL editor by Haris (JC1), because until Jobber approves the app a sixth paying Jobber account cuts off Jobber for every company.
 - Jobs list ordering must not depend on unread activity; reserve photo height before loading and avoid animated auto-scroll, because live updates and photo loads must not move the reader's place.
 - Home uses route-local tokens; ad samples use labeled fictional values, never live widgets.
 - Settings Admin links to the existing gated Pay route; office teams enter Admin without owner setup tabs.
@@ -24,7 +25,9 @@
 - Crew-only accounts stay on the pages in src/lib/crewPaths.ts; DashboardLayout sends other dashboard addresses to Jobs to Bid, so typed owner URLs never open company tools.
 - Owner-typed costs, margins and calibration numbers go through src/lib/inputLimits.ts, because negative or absurd values were saved and priced.
 - Catch expected refusals (no free seat, no card on file) and show the function's message, because the global error reporter texts TreeCheck's admin for every uncaught error.
+- The large-company setup (production_* tables from PS1, the production-* functions, the new modules in src/lib/production and their generated copy in supabase/functions/_shared/production) is maintained outside Lovable; it shows only where production_status() allows it (production_rollout plus an employees or hybrid company), production packets never hold a price, and internal costs show only to the owner and the cost viewers the owner picked, because crew leaders read packets and margins are private.
 <!-- LOVABLE:BEGIN -->
 - DMA setup is company-scoped and written through dma-setup, separately from login email and website routing; connected status follows the existing publisher's tenant configuration rather than subscription status, because a paid customer may still need emailed content.
 - Non-website DMA content is generated and edited through dma-email-content and saved in dma_email_posts; email sends stay unavailable until verified sender infrastructure exists, because drafts must never be reported as delivered.
 <!-- LOVABLE:END -->
+- Signup consent is recorded only by the signup functions into communication_consents (append-only, service-role writes) using the server copy of the wording in supabase/functions/_shared/consent.ts, kept identical to src/lib/consent.ts; marketing consent stays optional and unchecked, because US texting law forbids making it a condition of signing up.

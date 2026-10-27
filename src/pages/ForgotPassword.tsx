@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Loader2, MailCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -17,8 +17,12 @@ export default function ForgotPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    // Inside the phone app the origin is an internal app address that email links can't open.
+    const origin = window.location.origin.startsWith('http') && !window.location.origin.includes('localhost')
+      ? window.location.origin
+      : 'https://app.treecheck.ai';
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${origin}/reset-password`,
     });
     setLoading(false);
     if (error) {
@@ -45,8 +49,8 @@ export default function ForgotPassword() {
             <div className="space-y-4 text-center">
               <MailCheck className="mx-auto h-10 w-10 text-primary" />
               <p className="text-sm text-muted-foreground">
-                We sent a reset link to <span className="font-medium text-foreground">{email}</span>. Open it on
-                this phone and you'll be able to choose a new password.
+                We sent a reset link to <span className="font-medium text-foreground">{email}</span>. It opens in
+                your web browser. Choose a new password there, then come back to the TreeCheck app and sign in with it.
               </p>
               <p className="text-xs text-muted-foreground">
                 No email after a few minutes? Check your spam folder or try again.

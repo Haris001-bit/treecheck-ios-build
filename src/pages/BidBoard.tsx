@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ScoutInbox from '@/pages/ScoutInbox';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -41,6 +41,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { FreeUsageNote } from '@/components/free/FreeUsageNote';
+import { useProductionStatus } from '@/hooks/useProductionStatus';
 
 const WORKFLOW_LABELS: Record<string, string> = {
   open: 'Open',
@@ -59,6 +60,8 @@ const CLOSED_STATUSES = new Set(['job_complete', 'quote_declined', 'no_longer_ne
 export default function BidBoard() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  // Large-company setup: once the company publishes its crew rates, its own crews' work sits beside the sub jobs.
+  const { status: production } = useProductionStatus();
   const { data: ownerProfile } = useProfile();
   const ownerLabel = (ownerProfile?.company_name || '').trim() || 'You';
   const { data: requests, isLoading } = useBidRequests();
@@ -457,7 +460,10 @@ export default function BidBoard() {
             Sealed offers from your crew, with the quote to send and what you keep on every option.
           </p>
         </div>
-        <Button onClick={() => setNewOpen(true)}><Plus className="w-4 h-4 mr-1.5" />New bid request</Button>
+        <div className="flex flex-wrap gap-2">
+          {production.published && <Button asChild variant="outline"><Link to="/dashboard/bid-board/crew">Crew work</Link></Button>}
+          <Button onClick={() => setNewOpen(true)}><Plus className="w-4 h-4 mr-1.5" />New bid request</Button>
+        </div>
       </div>
       <FreeUsageNote kind="jobs" className="mb-4" />
 

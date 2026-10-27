@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import treecheckLogo from '@/assets/treecheck-logo-dark.png';
+import treecheckLogo from '@/assets/treecheck-white-login.png';
 import walkthroughVideoAsset from '@/assets/treecheck-grounds-walkthrough-mobile.mp4.asset.json';
 import walkthroughPosterAsset from '@/assets/treecheck-grounds-walkthrough-poster.jpg.asset.json';
 import { Smartphone, Apple, Monitor, Download, Share2, MoreVertical, Check, PlayCircle } from 'lucide-react';

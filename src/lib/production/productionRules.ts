@@ -1,0 +1,137 @@
+/**
+ * Large-company setup: what a work item needs (crew, hours, equipment, materials, loads). Pure.
+ * Removals use Mark's engine (buildProductionPlan) unless the salesperson picked the crew and hours; every other
+ * service uses its rule: hours = base + sum(coefficient x answer), rounded to the half hour.
+ */
+import { buildProductionPlan, personHoursOf, ENGINE_VERSION, type CrewLine, type EquipmentLine, type Fact, type JobCharacteristics } from './engine';
+import type { Answers, CrewTemplate, RateCardDefinition, Service } from './rules';
+import { answerNum, answerStr, answerYes, halfHour, isAnswered, matches, r2 } from './answers';
+
+export const PRODUCTION_ENGINE_VERSION = ENGINE_VERSION;
+
+export type AnswerSource = 'known' | 'ai' | 'default';
+
+export interface ProductionEstimate {
+  crewTemplate: string | null;
+  headcount: number;
+  /** How long the job takes on site (the crew is booked this long). */
+  hours: number;
+  /** One crew slot for this long: what capacity planning counts per crew template. */
+  crewHours: number;
+  manHours: number;
+  crew: CrewLine[];
+  equipment: EquipmentLine[];
+  materials: { key: string; quantity: number }[];
+  loads: number;
+  source: 'answered' | 'rule' | 'removal_engine';
+  confidence: 'high' | 'medium' | 'low';
+  assumptions: string[];
+}
+
+export function crewTemplateOf(def: RateCardDefinition, key: string | null | undefined): CrewTemplate | undefined {
+  return key ? def.crews.find((c) => c.key === key) : undefined;
+}
+export const headcountOf = (t: CrewTemplate | undefined) => (t ? t.roles.reduce((s, r) => s + r.count, 0) : 0);
+
+const fact = <T,>(v: T | null, src: AnswerSource | undefined): Fact<T> | undefined =>
+  v === null || v === undefined ? undefined : { value: v, source: src === 'ai' ? 'inferred' : src === 'default' ? 'hint' : 'known' };
+
+/** Answers in the starter keys (dbh, height, access...) as Mark's engine inputs. */
+export function removalCharacteristics(a: Answers, sources: Record<string, AnswerSource> = {}): JobCharacteristics {
+  const access = answerStr(a, 'access');
+  const power = answerStr(a, 'power_lines') ?? answerStr(a, 'utility');
+  const cond = answerStr(a, 'condition');
+  const drop = answerStr(a, 'drop_zone');
+  return {
+    service: 'Tree Removal',
+    dbhInches: fact(answerNum(a, 'dbh'), sources.dbh),
+    heightFt: fact(answerNum(a, 'height'), sources.height),
+    access: fact(access === 'rear_yard' ? 'tight' : access === 'easy' || access === 'moderate' || access === 'tight' ? access : null, sources.access),
+    dropZone: fact(drop === 'open' || drop === 'restricted' ? drop : null, sources.drop_zone),
+    powerLines: fact(power === null ? null : !['no', 'none', 'false'].includes(power.toLowerCase()), sources.power_lines ?? sources.utility),
+    nearStructure: fact(isAnswered(a, 'structure_near') ? answerYes(a, 'structure_near') : null, sources.structure_near),
+    condition: fact(cond === 'healthy' || cond === 'declining' || cond === 'dead' ? cond : null, sources.condition),
+    craneIndicated: fact(isAnswered(a, 'crane') ? answerYes(a, 'crane') : null, sources.crane),
+    treeCount: fact(answerNum(a, 'tree_count'), sources.tree_count),
+    loads: fact(answerNum(a, 'loads'), sources.loads),
+    stumpDiameterInches: fact(answerNum(a, 'stump_diameter'), sources.stump_diameter) ?? null,
+  };
+}
+
+export function productionFor(def: RateCardDefinition, service: Service, a: Answers,
+  sources: Record<string, AnswerSource> = {}): ProductionEstimate {
+  const rule = service.production ?? {};
+  const st = service.strategy;
+  const assumptions: string[] = [];
+  const pickedCrew = st.kind === 'crew_time' ? answerStr(a, st.crewQuestion) : null;
+  const pickedHours = st.kind === 'crew_time' ? answerNum(a, st.hoursQuestion) : null;
+  let template = crewTemplateOf(def, pickedCrew) ?? crewTemplateOf(def, rule.crewTemplate);
+  let source: ProductionEstimate['source'] = 'rule';
+  let confidence: ProductionEstimate['confidence'] = 'high';
+  let hours: number;
+  let crew: CrewLine[] = [];
+  let equipment: EquipmentLine[] = [];
+  let loads = 0;
+
+  if (pickedHours !== null && pickedHours > 0) {
+    hours = halfHour(pickedHours);
+    source = 'answered';
+  } else if (rule.useRemovalEngine) {
+    const plan = buildProductionPlan(removalCharacteristics(a, sources));
+    hours = plan.durationHours;
+    source = 'removal_engine';
+    confidence = plan.confidence;
+    loads = plan.loads;
+    assumptions.push(...plan.assumptions);
+    if (!template) { crew = plan.crew; equipment = plan.equipment; }
+  } else {
+    let h = rule.baseHours ?? 0;
+    for (const p of rule.perUnit ?? []) h += (answerNum(a, p.question) ?? 0) * p.hours;
+    hours = h > 0 ? halfHour(h) : 0;
+    if (h <= 0) assumptions.push('No hours rule for this service yet');
+  }
+
+  if (!template && crew.length === 0 && def.crews.length > 0 && hours > 0) {
+    template = def.crews[0];
+    assumptions.push(`Crew assumed: ${template.name}`);
+  }
+  if (template) crew = template.roles.map((r) => ({ roleKey: r.roleKey, count: r.count, hours }));
+
+  const add = (key: string, h: number) => {
+    const at = equipment.find((e) => e.key === key);
+    if (at) at.hours = Math.max(at.hours, h); else equipment.push({ key, hours: h });
+  };
+  if (rule.bundle) {
+    const b = def.bundles.find((x) => x.key === rule.bundle);
+    for (const k of b?.equipment ?? []) add(k, hours);
+  }
+  for (const e of rule.equipment ?? []) {
+    if (e.when && !matches(e.when, a)) continue;
+    add(e.key, e.hours === undefined || e.hours === 'job' ? hours : e.hours);
+  }
+  if (st.kind === 'crew_time') {
+    for (const ad of st.equipmentAdders ?? []) if (answerYes(a, ad.question)) add(ad.equipment, hours);
+  }
+
+  const materials: { key: string; quantity: number }[] = [];
+  for (const m of rule.materials ?? []) {
+    if (m.when && !matches(m.when, a)) continue;
+    const q = m.quantityQuestion ? answerNum(a, m.quantityQuestion) ?? 0 : m.quantity ?? 1;
+    if (q > 0) materials.push({ key: m.key, quantity: r2(q) });
+  }
+  if (rule.loads) {
+    let l = rule.loads.base ?? 0;
+    for (const p of rule.loads.perUnit ?? []) l += (answerNum(a, p.question) ?? 0) * p.loads;
+    loads = Math.max(loads, Math.ceil(l));
+  }
+
+  const headcount = crew.reduce((s, c) => s + c.count, 0);
+  return {
+    crewTemplate: template?.key ?? null,
+    headcount,
+    hours,
+    crewHours: hours,
+    manHours: personHoursOf(crew),
+    crew, equipment, materials, loads, source, confidence, assumptions,
+  };
+}

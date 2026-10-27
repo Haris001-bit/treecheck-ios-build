@@ -114,3 +114,9 @@ Plan approved. Tasks:
 - [x] Answered: Free owners post jobs via Jobs → New bid request; non-Pulse dashboard shows a "Set up" Pulse card and the AI jobs summary
 - [ ] Welcome page "I run a tree company" card: switch to new pricing in the same step the live checkout moves to the new catalog (waiting on Mark's go-live decision)
 - [ ] Free plan: website leads that hit the 5-job limit stay in the leads list instead of waiting in Jobs (needs a 'waiting to send' job state)
+
+## Ripsaw RS2511 giveaway (Oct 26)
+- [x] Giveaway entries table, trial-signup entry (marketing box), free entry page, official rules page, trial-page banner, admin entry list + random draw (free entry verified; trial-signup entry not run live)
+- [ ] Official Rules placeholders: waiting on Mark/lawyer for sponsor name and address, eligibility, age, eligible states, start date, retail value and the other legal terms (and whether a free entry method is needed)
+- [x] Apply Mark's trial-page brief: new intro line, giveaway section (auto-entry on trial start, no free entry, renewal disclosure), placeholder Official Rules, billed-annually wording
+- [x] Replace the trial-page giveaway banner image with the new chainsaw photo

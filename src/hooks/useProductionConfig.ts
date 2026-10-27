@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import type { CompanyCostConfig } from '@/lib/production/engine';
 
 export interface LaborRole { id?: string; role_key: string; name: string; loaded_hourly_cost: number; sort_order: number }
-export interface EquipmentItem { id?: string; equipment_key: string; name: string; hourly_cost: number; sort_order: number }
+export interface EquipmentItem { id?: string; equipment_key: string; name: string; hourly_cost: number; sort_order: number; unit?: 'hour' | 'each' | 'job' }
 export interface ProductionPricing { target_margin: number; minimum_job_charge: number | null; disposal_per_load: number | null }
 
 export const DEFAULT_ROLES: LaborRole[] = [

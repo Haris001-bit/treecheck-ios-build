@@ -29,6 +29,8 @@ const NEW = [
   "jobberCompletion.ts", "jobberQueries.webhook.ts",
   // Added by the Jobs calendar PR (JS2).
   "jobberVisitDays.ts",
+  // Added by the large-company setup (crew estimates in Jobber, 2026-10-26).
+  "jobberQueries.production.ts",
 ];
 // TreeCheck's Jobber modules as found in _shared: every jobber*.ts except Financial Pulse's own jobber.ts,
 // plus the three named otherwise. One added or renamed without joining NEW fails the coverage check.
@@ -50,6 +52,11 @@ const MAY_IMPORT_NEW: string[] = [
   "billing-reminders",
   // Mark's text when an owner picks a CRM other than Jobber (2026-10-22): sendSms and the sandbox off switch.
   "crm-interest-alert",
+  // The Jobber places limit (JC1, 2026-10-26): Mark's waitlist text and email (sendSms, sendEmail, the sandbox off switch).
+  "jobber-connect",
+  // The large-company setup's crew estimates in Jobber (2026-10-26), through productionJobber.ts. jobber-webhook reaches
+  // them only by calling production-jobber over HTTP, so its own import graph doesn't change.
+  "production-estimate", "production-work", "production-jobber",
 ];
 // The only names TreeCheck may take from Financial Pulse's _shared/jobber.ts (plan section 2.1).
 const JOBBER_TS_NAMES = ["getJobberToken", "JobberGraphqlError", "JobberReconnectRequired", "JOBBER_GRAPHQL_URL", "ownerIdOf"];

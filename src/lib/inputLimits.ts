@@ -29,6 +29,11 @@ export function firstOutOfRange(c: ConfirmedCharacteristics): CharKey | null {
   return null;
 }
 
+/** Large-company rate cards: the widest a typed price, percent or count may be (typos only, never a real job). */
+export const RATE_CARD_MONEY_MAX = 1_000_000;
+export const RATE_CARD_PERCENT_MAX = 100;
+export const RATE_CARD_COUNT_MAX = 1_000;
+
 /** A typed cost or percentage: blank is 0, never negative, never above `max`. */
 export function clampTyped(raw: string, max = Number.MAX_SAFE_INTEGER): number {
   const n = raw === '' ? 0 : Number(raw);

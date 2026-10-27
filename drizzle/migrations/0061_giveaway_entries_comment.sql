@@ -1,0 +1,1 @@
+COMMENT ON TABLE public.giveaway_entries IS 'One entry per email per giveaway. Starting the 14-day trial is the entry: written only by create-trial-signup (service role); promoted from awaiting_trial and drawn only by giveaway-draw, which sets drawn_at. consent_* columns hold wording from the retired free-entry form only.';

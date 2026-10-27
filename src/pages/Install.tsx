@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
-import treecheckLogo from "@/assets/treecheck-logo-dark.png";
+import treecheckLogo from "@/assets/treecheck-white-login.png";
 import { GetTheApp } from "@/components/GetTheApp";
 
 export default function Install() {

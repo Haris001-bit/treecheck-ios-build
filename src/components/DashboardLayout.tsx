@@ -33,9 +33,10 @@ import {
   HardHat,
   Gavel,
   CalendarDays,
-  Settings2, Flag, Rocket, FlaskConical, LineChart, Clock, Target, ClipboardList, Loader2, CreditCard } from 'lucide-react';
+  Settings2, Flag, Rocket, FlaskConical, LineChart, Clock, Target, ClipboardList, Loader2, CreditCard, Gift } from 'lucide-react';
 import { usePulseAccess } from '@/hooks/pulse/usePulseAccess';
 import { useCompanySettings, usesSubs } from '@/hooks/useCompanySettings';
+import { useProductionStatus } from '@/hooks/useProductionStatus';
 import { useIsCrewOnly } from '@/hooks/useCrew';
 import { isCrewPath } from '@/lib/crewPaths';
 import { cn } from '@/lib/utils';
@@ -100,6 +101,11 @@ export default function DashboardLayout() {
   const { isCrew, isCrewOnly, loading: crewLoading } = useIsCrewOnly();
   const { data: company, isLoading: companyLoading } = useCompanySettings();
   const subsOn = isAdmin || usesSubs(company);
+  // Large-company setup: once the company publishes its crew rates, Jobs also holds its own crews' work. People who
+  // can't use the sub bid board (crew leaders, salespeople) go straight to Crew work. Nothing changes for anyone else.
+  const { status: production } = useProductionStatus();
+  const crewJobs = production.published && (production.can.dispatch || production.can.field || production.can.price);
+  const jobsPath = crewJobs && (!subsOn || !production.can.dispatch) ? '/dashboard/bid-board/crew' : subsOn ? '/dashboard/bid-board' : null;
   const needsSetup = !isAdmin && !isTeamMember && !crewLoading && !isCrewOnly && !companyLoading && !company?.onboarding_completed_at;
   const { allowed: pulseAllowed } = usePulseAccess();
   // Free plan (Oklahoma owners): Scout and Marketing open their preview versions.
@@ -127,7 +133,7 @@ export default function DashboardLayout() {
     const items: any[] = [];
     // Jobs is also for team members (e.g. LesLee) who compare offers.
     items.push({ to: '/dashboard/home', icon: LayoutDashboard, label: 'Dashboard' });
-    if (subsOn) items.push({ to: '/dashboard/bid-board', icon: ClipboardList, label: 'Jobs' });
+    if (jobsPath) items.push({ to: jobsPath, icon: ClipboardList, label: 'Jobs', activePaths: ['/dashboard/bid-board'] });
     items.push({ to: '/dashboard/instant-estimator', icon: Zap, label: 'Scout™', product: 'scout' as Product });
     items.push({ to: '/dashboard/dma', icon: Megaphone, label: 'Marketing', product: 'dma' as Product });
     if (pulseAllowed && !isTeamMember) items.push({ to: '/dashboard/pulse', icon: LineChart, label: 'Pulse' });
@@ -155,7 +161,7 @@ export default function DashboardLayout() {
       activePaths: SETTINGS_PATHS,
     });
     return items;
-  }, [isTeamMember, safeMode, effectiveContractorId, iap, storePlans, isCrew, isCrewOnly, hasAvailableLeads, subsOn, pulseAllowed]);
+  }, [isTeamMember, safeMode, effectiveContractorId, iap, storePlans, isCrew, isCrewOnly, hasAvailableLeads, subsOn, pulseAllowed, jobsPath]);
 
   const openExternal = async (url: string) => {
     try {
@@ -175,6 +181,7 @@ export default function DashboardLayout() {
     },
     { to: "/dashboard/admin/review-reports", icon: Flag, label: "Review Reports" },
     { to: "/dashboard/admin/signup-sandbox", icon: FlaskConical, label: "Signup Sandbox" },
+    { to: "/dashboard/admin/giveaway", icon: Gift, label: "Giveaway" },
     { to: "/dashboard/admin/pulse", icon: LineChart, label: "Financial Pulse" },
   ];
 

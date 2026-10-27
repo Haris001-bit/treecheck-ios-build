@@ -400,6 +400,48 @@
       "when": 1792684994321,
       "tag": "0056_crm_interest_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1793024879949,
+      "tag": "0057_jobber_connect_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1793032626717,
+      "tag": "0058_communication_consents",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793034370719,
+      "tag": "0059_giveaway_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793042440373,
+      "tag": "0060_giveaway_entry_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793042631929,
+      "tag": "0061_giveaway_entries_comment",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793091956209,
+      "tag": "0062_ps1_production_setup",
+      "breakpoints": true
     }
   ]
 }
