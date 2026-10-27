@@ -10,6 +10,8 @@ import { today } from '@/components/production/setup/types';
 import { toCapacityPacket } from './reportRows';
 
 const human = (k: string) => k.replace(/_/g, ' ');
+/** Names in sentence case ("Mini skid"), not every word capitalized. */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const dayLabel = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 const OPEN = ['ready', 'planned', 'scheduled', 'in_progress'];
 
@@ -23,7 +25,7 @@ function Rows({ title, rows, names }: { title: string; rows: CapacityRow[]; name
         return (
           <div key={r.key} className="space-y-1">
             <div className="flex justify-between gap-2 text-sm">
-              <span className="capitalize">{names[r.key] ?? human(r.key)}</span>
+              <span>{sentence(names[r.key] ?? human(r.key))}</span>
               <span className={r.over ? 'text-destructive font-medium' : 'text-muted-foreground'}>
                 {r.demand} of {r.available} hours{r.over ? ', over capacity' : ''}
               </span>

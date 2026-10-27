@@ -51,7 +51,7 @@ export interface PacketRow {
   est_hours: number | null; est_crew_hours: number | null; est_man_hours: number | null;
   resources: { key: string; hours: number }[];
   scheduling_class: string; promised_window?: { from?: string | null; to?: string | null } | null;
-  depends_on: string[]; status: string; planned_date: string | null; scheduled_date: string | null;
+  depends_on: string[]; status: string; planned_date: string | null; scheduled_date: string | null; completed_at?: string | null;
   crew_leader_id: string | null; jobber_job_id?: string | null; jobber_job_number?: string | null; tasks: { key: string; kind: string; title: string; status: string; dueAt?: string | null }[];
   actuals: { headcount?: number; hours?: number; manHours?: number; equipment?: Record<string, number>; expenses?: number | null; factors?: string[]; notes?: string } | null;
   updated_at: string;

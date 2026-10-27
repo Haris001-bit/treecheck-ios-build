@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, FileText, Loader2, Plus, Save, Send, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,7 +26,7 @@ import { WorkItemCard } from '@/components/production/estimate/WorkItemCard';
 import { startingAnswers, type ItemDraft } from '@/components/production/estimate/choices';
 import { PhotoStrip } from '@/components/production/estimate/PhotoStrip';
 
-type Customer = { name: string; phone: string; email: string; address: string; gateCode: string; accessNotes: string };
+type Customer = { name: string; phone: string; email: string; address: string; gateCode: string; accessNotes: string; jobberRequestId?: string };
 type Window = { from?: string; to?: string };
 const EMPTY_CUSTOMER: Customer = { name: '', phone: '', email: '', address: '', gateCode: '', accessNotes: '' };
 const LOST_REASONS = ['Price', 'Went with another company', 'Timing', 'No response', 'Other'];
@@ -50,7 +50,9 @@ export default function ProductionEstimate() {
   const def = card.data?.def ?? null;
   // Names the folder for photos taken before the first save.
   const [estimateKey] = useState(() => id ?? newKey('e'));
-  const [customer, setCustomer] = useState<Customer>(EMPTY_CUSTOMER);
+  // Started from a Jobber request (Crew work, approval extras): the customer comes filled in.
+  const fromRequest = (useLocation().state as { fromRequest?: Partial<Customer> } | null)?.fromRequest;
+  const [customer, setCustomer] = useState<Customer>(() => (id || !fromRequest ? EMPTY_CUSTOMER : { ...EMPTY_CUSTOMER, ...fromRequest }));
   const [window_, setWindow] = useState<Window>({});
   const [trees, setTrees] = useState<TreeDraft[]>([firstTree()]);
   const [items, setItems] = useState<ItemDraft[]>([]);
@@ -297,7 +299,7 @@ export default function ProductionEstimate() {
       )}
 
       <fieldset disabled={readOnly} className="space-y-4">
-        <Section title="Customer and property">
+        <Section title="Customer and property" hint={customer.jobberRequestId ? 'From a Jobber request. The Jobber quote is linked to it.' : undefined}>
           <div className="grid gap-3 sm:grid-cols-2">
             <TextField label="Name" value={customer.name} max={120} onChange={(v) => setCustomer({ ...customer, name: v })} />
             <TextField label="Phone" value={customer.phone} max={40} onChange={(v) => setCustomer({ ...customer, phone: v })} />

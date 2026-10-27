@@ -377,6 +377,7 @@
       "_shared/jobberApi.ts",
       "_shared/jobberClient.ts",
       "_shared/jobberClientMatch.ts",
+      "_shared/jobberQueries.extras.ts",
       "_shared/jobberQueries.production.ts",
       "_shared/jobberQueries.quote.ts",
       "_shared/jobberStatus.ts",
@@ -386,6 +387,7 @@
       "_shared/production/costs.ts",
       "_shared/production/engine.ts",
       "_shared/production/estimate.ts",
+      "_shared/production/jobberExtras.ts",
       "_shared/production/packaging.ts",
       "_shared/production/playbooks.ts",
       "_shared/production/pricing.ts",
@@ -397,7 +399,8 @@
       "_shared/productionAccess.ts",
       "_shared/productionActivate.ts",
       "_shared/productionData.ts",
-      "_shared/productionJobber.ts"
+      "_shared/productionJobber.ts",
+      "_shared/productionJobberExtras.ts"
     ],
     "production-jobber": [
       "_shared/freeDays.ts",
@@ -406,6 +409,7 @@
       "_shared/jobberApi.ts",
       "_shared/jobberClient.ts",
       "_shared/jobberClientMatch.ts",
+      "_shared/jobberQueries.extras.ts",
       "_shared/jobberQueries.production.ts",
       "_shared/jobberQueries.quote.ts",
       "_shared/jobberStatus.ts",
@@ -414,6 +418,7 @@
       "_shared/production/capacity.ts",
       "_shared/production/engine.ts",
       "_shared/production/estimate.ts",
+      "_shared/production/jobberExtras.ts",
       "_shared/production/packaging.ts",
       "_shared/production/playbooks.ts",
       "_shared/production/pricing.ts",
@@ -424,21 +429,33 @@
       "_shared/production/rules.ts",
       "_shared/productionActivate.ts",
       "_shared/productionData.ts",
-      "_shared/productionJobber.ts"
+      "_shared/productionJobber.ts",
+      "_shared/productionJobberExtras.ts"
     ],
     "production-setup": [
+      "_shared/jobber.ts",
+      "_shared/jobberApi.ts",
+      "_shared/jobberQueries.extras.ts",
+      "_shared/jobberSwitches.ts",
       "_shared/production/answers.ts",
       "_shared/production/capacity.ts",
       "_shared/production/contradictions.ts",
       "_shared/production/costs.ts",
       "_shared/production/engine.ts",
+      "_shared/production/estimate.ts",
+      "_shared/production/jobberExtras.ts",
+      "_shared/production/packaging.ts",
+      "_shared/production/playbooks.ts",
       "_shared/production/pricing.ts",
       "_shared/production/productionRules.ts",
       "_shared/production/profiles.ts",
+      "_shared/production/proposal.ts",
+      "_shared/production/quoteLines.ts",
       "_shared/production/rules.ts",
       "_shared/production/validation.ts",
       "_shared/productionAccess.ts",
-      "_shared/productionData.ts"
+      "_shared/productionData.ts",
+      "_shared/productionJobberExtras.ts"
     ],
     "production-work": [
       "_shared/freeDays.ts",
@@ -447,6 +464,7 @@
       "_shared/jobberApi.ts",
       "_shared/jobberClient.ts",
       "_shared/jobberClientMatch.ts",
+      "_shared/jobberQueries.extras.ts",
       "_shared/jobberQueries.production.ts",
       "_shared/jobberQueries.quote.ts",
       "_shared/jobberStatus.ts",
@@ -455,6 +473,7 @@
       "_shared/production/capacity.ts",
       "_shared/production/engine.ts",
       "_shared/production/estimate.ts",
+      "_shared/production/jobberExtras.ts",
       "_shared/production/packaging.ts",
       "_shared/production/playbooks.ts",
       "_shared/production/pricing.ts",
@@ -466,7 +485,8 @@
       "_shared/productionAccess.ts",
       "_shared/productionActivate.ts",
       "_shared/productionData.ts",
-      "_shared/productionJobber.ts"
+      "_shared/productionJobber.ts",
+      "_shared/productionJobberExtras.ts"
     ],
     "promote-scout-to-lead": [],
     "pulse-admin": [

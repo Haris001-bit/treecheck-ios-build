@@ -31,6 +31,8 @@ const NEW = [
   "jobberVisitDays.ts",
   // Added by the large-company setup (crew estimates in Jobber, 2026-10-26).
   "jobberQueries.production.ts",
+  // Added by the approval extras (switched off until Jobber approves the app's permissions, 2026-10-27).
+  "jobberQueries.extras.ts",
 ];
 // TreeCheck's Jobber modules as found in _shared: every jobber*.ts except Financial Pulse's own jobber.ts,
 // plus the three named otherwise. One added or renamed without joining NEW fails the coverage check.
@@ -57,6 +59,8 @@ const MAY_IMPORT_NEW: string[] = [
   // The large-company setup's crew estimates in Jobber (2026-10-26), through productionJobber.ts. jobber-webhook reaches
   // them only by calling production-jobber over HTTP, so its own import graph doesn't change.
   "production-estimate", "production-work", "production-jobber",
+  // The approval extras in setup (2026-10-27): permissions, services, team and quote fields, through productionJobberExtras.ts.
+  "production-setup",
 ];
 // The only names TreeCheck may take from Financial Pulse's _shared/jobber.ts (plan section 2.1).
 const JOBBER_TS_NAMES = ["getJobberToken", "JobberGraphqlError", "JobberReconnectRequired", "JOBBER_GRAPHQL_URL", "ownerIdOf"];

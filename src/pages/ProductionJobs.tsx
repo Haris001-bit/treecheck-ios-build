@@ -19,6 +19,7 @@ import { backlogWeeks, capacitySettingsOf } from '@/lib/production/capacity';
 import { CapacityTab } from '@/components/production/jobs/CapacityTab';
 import { ReportsTab } from '@/components/production/jobs/ReportsTab';
 import { ProfileCard } from '@/components/production/jobs/ProfileCard';
+import { JobberRequests } from '@/components/production/jobs/JobberRequests';
 import { toCapacityPacket } from '@/components/production/jobs/reportRows';
 import { useCompanySettings, usesSubs } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/lib/auth';
@@ -144,7 +145,8 @@ function PacketCard({ packet, siblings, leaders, userId, dispatch, isLeader, job
               {(packet.resources ?? []).length > 0 && `, ${packet.resources.map((r) => `${human(r.key)} ${r.hours} hr`).join(', ')}`}
             </div>
             <div className="text-xs text-muted-foreground">
-              {day(packet.scheduled_date) ? `Scheduled ${day(packet.scheduled_date)}` : day(packet.planned_date) ? `Planned ${day(packet.planned_date)}` : 'No day yet'}
+              {packet.status === 'done' ? `Finished${day(packet.completed_at ?? null) ? ` ${day(packet.completed_at ?? null)}` : ''}`
+                : day(packet.scheduled_date) ? `Scheduled ${day(packet.scheduled_date)}` : day(packet.planned_date) ? `Planned ${day(packet.planned_date)}` : 'No day yet'}
               {leaderName ? `, crew leader ${leaderName}` : ''}
             </div>
           </div>
@@ -379,6 +381,7 @@ export default function ProductionJobs() {
 
         {showEstimates && (
           <TabsContent value="estimates" className="space-y-3">
+            <JobberRequests on={status.jobber_extras} />
             <div className="flex flex-wrap gap-1">
               {ESTIMATE_FILTERS.map(([k, l]) => <Button key={k} size="sm" variant={estimateFilter === k ? 'default' : 'outline'} onClick={() => setEstimateFilter(k)}>{l}</Button>)}
             </div>

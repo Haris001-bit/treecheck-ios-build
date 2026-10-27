@@ -206,7 +206,10 @@ describe('Crew work', () => {
     await show();
     await openTab('Reports');
     expect(page()).toContain('1 finished job: 12 man-hours estimated, 15 actual (+25%).');
-    expect(page()).toContain('lift hours');
+    expect(page()).toContain('Lift hours');
+    expect(page()).toContain('No estimate won or lost yet.');
+    expect(page()).toContain('No priced work yet.');
+    expect(page()).not.toContain('none yet of');
   });
 
   it('crew leaders get neither Capacity nor Reports', async () => {

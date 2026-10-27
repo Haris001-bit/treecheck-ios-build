@@ -47,7 +47,7 @@ const TITLES: Record<PackageKey, string> = {
 const ORDER: PackageKey[] = ['removal', 'pruning', 'stump', 'cabling', 'planting', 'phc', 'other'];
 const AFTER: Partial<Record<PackageKey, PackageKey[]>> = { stump: ['removal'], planting: ['removal', 'stump'] };
 
-/** Short plain scope from the answers, for the crew: "32 in DBH, rear yard access, lift, mini skid". */
+/** Short plain scope from the answers, for the crew and the quote: "Remove the tree (32 in DBH, access: rear yard, lift)". */
 export function scopeText(service: Service, a: Answers): string {
   const bits: string[] = [];
   for (const q of service.questions) {
@@ -59,7 +59,8 @@ export function scopeText(service: Service, a: Answers): string {
     bits.push(`${v}${q.unit ? ` ${q.unit}` : ''} ${q.label.toLowerCase()}`.trim());
   }
   const head = service.customerText?.trim() || service.name;
-  return bits.length ? `${head}: ${bits.join(', ')}` : head;
+  // In brackets, so a choice's own colon never doubles up ("dispose of debris (access: rear yard)").
+  return bits.length ? `${head} (${bits.join(', ')})` : head;
 }
 
 export function planPackets(def: RateCardDefinition, items: PacketItemInput[], playbook: PlaybookResult): PacketSpec[] {

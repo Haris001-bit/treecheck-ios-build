@@ -1,7 +1,9 @@
 // Large-company setup: crew estimates in Jobber. sendEstimate makes the estimate's draft quote in Jobber (TreeCheck
 // never sends it to the customer: the office checks it and sends it from Jobber), checkEstimate finds a quote Jobber
 // made without confirming it, and the event handlers (production-jobber, which jobber-webhook calls) follow the quote's
-// approval and the jobs and visits the office makes from it. Server-side only. Maintained outside Lovable.
+// approval and the jobs and visits the office makes from it. Once Jobber approves the app's extra permissions and
+// production_rollout.jobber_extras is on, the quote also carries the approval extras (productionJobberExtras.ts).
+// Server-side only. Maintained outside Lovable.
 //
 // One attempt per estimate, as in jobberQuote.ts: production_estimates.quote_state is claimed with a conditional
 // update before anything goes to Jobber, and a claim left behind by a crash counts as abandoned after 5 minutes.
@@ -20,6 +22,8 @@ import { completionDecision } from "./jobberStatus.ts";
 import { localDateOf } from "./freeDays.ts";
 import { activateEstimate } from "./productionActivate.ts";
 import { backlogNow, companySettings } from "./productionData.ts";
+import { quoteExtrasFor } from "./productionJobberExtras.ts";
+import { withQuoteExtras } from "./production/jobberExtras.ts";
 import { parseDefinition } from "./production/rules.ts";
 import type { PricedItem } from "./production/estimate.ts";
 import {
@@ -126,30 +130,34 @@ async function planFor(admin: Admin, ownerId: string, est: EstimateRow, def: Non
 }
 
 type Created = { kind: "ok"; id: string; quoteNumber: string | null; plan: QuotePlan } | { kind: "uncertain" } | { kind: "refused"; error: string };
+type AddExtras = (attributes: Record<string, unknown>, plan: QuotePlan) => Record<string, unknown>;
 
-/** quoteCreate, once; if Jobber definitely refuses a quote with text-only lines, once more with them as $0 lines. */
-async function createQuote(token: string, plan: QuotePlan, clientId: string, propertyId: string, signal: AbortSignal): Promise<Created> {
+/**
+ * quoteCreate, once. Only when Jobber definitely refuses: again without the approval extras (when there were any),
+ * then with text-only lines sent as $0 lines. Never again after an answer Jobber may have acted on.
+ */
+async function createQuote(token: string, plan: QuotePlan, clientId: string, propertyId: string, signal: AbortSignal, extras: AddExtras | null = null): Promise<Created> {
   type Reply = { quoteCreate?: { quote?: { id?: string; quoteNumber?: string | number | null } | null } | null };
-  const attempt = async (p: QuotePlan) =>
-    (await jobberMutate<Reply>(token, TC_QuoteCreate, { attributes: quoteCreateAttributes(p, clientId, propertyId) }, { signal })).data.quoteCreate?.quote ?? null;
-  let used = plan;
-  let quote: { id?: string; quoteNumber?: string | number | null } | null;
-  try {
-    quote = await attempt(plan);
-  } catch (e) {
-    if (e instanceof JobberUncertainError) return { kind: "uncertain" };
-    const refusedLines = e instanceof JobberDefiniteError && (e.kind === "user_errors" || e.kind === "graphql");
-    if (!refusedLines || !plan.lineItems.some((l) => l.textOnly)) return { kind: "refused", error: shortJobberError(e) };
-    used = withoutTextOnly(plan);
+  const attempt = async (p: QuotePlan, withExtras: boolean) => {
+    const attributes = quoteCreateAttributes(p, clientId, propertyId);
+    return (await jobberMutate<Reply>(token, TC_QuoteCreate, { attributes: withExtras && extras ? extras(attributes, p) : attributes }, { signal })).data.quoteCreate?.quote ?? null;
+  };
+  const tries: [QuotePlan, boolean][] = [...(extras ? [[plan, true] as [QuotePlan, boolean]] : []), [plan, false]];
+  if (plan.lineItems.some((l) => l.textOnly)) tries.push([withoutTextOnly(plan), false]);
+  let error = "";
+  for (const [used, withExtras] of tries) {
     try {
-      quote = await attempt(used);
-    } catch (e2) {
-      if (e2 instanceof JobberUncertainError) return { kind: "uncertain" };
-      return { kind: "refused", error: shortJobberError(e2) };
+      const quote = await attempt(used, withExtras);
+      if (!quote?.id) return { kind: "uncertain" };
+      return { kind: "ok", id: quote.id, quoteNumber: quote.quoteNumber == null ? null : String(quote.quoteNumber), plan: used };
+    } catch (e) {
+      if (e instanceof JobberUncertainError) return { kind: "uncertain" };
+      error = shortJobberError(e);
+      const refused = e instanceof JobberDefiniteError && (e.kind === "user_errors" || e.kind === "graphql");
+      if (!refused) return { kind: "refused", error };
     }
   }
-  if (!quote?.id) return { kind: "uncertain" };
-  return { kind: "ok", id: quote.id, quoteNumber: quote.quoteNumber == null ? null : String(quote.quoteNumber), plan: used };
+  return { kind: "refused", error };
 }
 
 /** Stores the quote on the estimate (with each item's Jobber line) and marks the estimate sent, which freezes it. */
@@ -226,12 +234,14 @@ export async function sendEstimate(admin: Admin, input: { ownerId: string; estim
       await finish({ quote_state: "not_created", quote_error: "Jobber isn't connected." });
       return { state: "not_connected" };
     }
+    // The approval extras (off until Jobber approves the app's permissions); null when off.
+    const extras = await quoteExtrasFor(admin, token, input.ownerId, est, def);
     // The token is in hand before the budget starts (the token rule in jobberApi.ts).
     const signal = deadline(deps.budgetMs ?? BUDGET_MS);
     const client = await findOrCreateClient(
       token,
       { name: customer.name?.trim() || null, email: customer.email?.trim() || null, phone: customer.phone?.trim() || null, address },
-      { signal, needProperty: true, storedClientId: est.jobber_client_id },
+      { signal, needProperty: true, storedClientId: est.jobber_client_id ?? extras?.requestClientId ?? null },
     );
     if (!client.propertyId) {
       await finish({ quote_state: "failed", quote_error: "Jobber has no property for this customer." });
@@ -239,7 +249,8 @@ export async function sendEstimate(admin: Admin, input: { ownerId: string; estim
     }
     // Saved before the quote, so checkEstimate can look among this client's quotes if Jobber doesn't confirm it.
     await finish({ jobber_client_id: client.clientId, jobber_property_id: client.propertyId });
-    const made = await createQuote(token, plan, client.clientId, client.propertyId, signal);
+    const addExtras: AddExtras | null = extras ? (attributes, p) => withQuoteExtras(attributes, p, est.work_items ?? [], extras.extras) : null;
+    const made = await createQuote(token, plan, client.clientId, client.propertyId, signal, addExtras);
     if (made.kind === "uncertain") {
       await finish({ quote_state: "uncertain", quote_error: UNCERTAIN_TEXT });
       return { state: "uncertain", error: UNCERTAIN_TEXT };

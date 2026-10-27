@@ -8,6 +8,8 @@ import type { RateCardDefinition } from '@/lib/production/rules';
 const percent = (v: number | null | undefined) => (v === null || v === undefined ? 'none yet' : `${Math.round(v * 100)}%`);
 const vsEstimate = (ratio: number) => (ratio === 0 ? 'none yet' : `${ratio >= 1 ? '+' : ''}${Math.round((ratio - 1) * 100)}% against the estimate`);
 const human = (k: string) => k.replace(/_/g, ' ');
+/** Labels in sentence case ("1 to 2 weeks booked"), not every word capitalized. */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function RateTable({ title, rows, format, hint }: { title: string; rows: Rate[]; format: (v: number) => string; hint?: string }) {
   if (!rows.length) return null;
@@ -18,7 +20,7 @@ function RateTable({ title, rows, format, hint }: { title: string; rows: Rate[];
       <div className="divide-y text-sm">
         {rows.map((r) => (
           <div key={r.key} className="flex justify-between gap-2 py-1">
-            <span className="capitalize">{human(r.label)}</span>
+            <span>{sentence(human(r.label))}</span>
             <span className="text-muted-foreground">{format(r.value)} <span className="text-xs">({r.n})</span></span>
           </div>
         ))}
@@ -56,7 +58,7 @@ export function ReportsTab({ report, isLoading, can, def }: { report: Report; is
             {report.equipmentHours.length > 0 && (
               <div className="divide-y text-sm">
                 {report.equipmentHours.map((e) => (
-                  <div key={e.key} className="flex justify-between gap-2 py-1"><span className="capitalize">{human(e.key)} hours</span><span className="text-muted-foreground">{e.estimated} estimated, {e.actual} actual</span></div>
+                  <div key={e.key} className="flex justify-between gap-2 py-1"><span>{sentence(human(e.key))} hours</span><span className="text-muted-foreground">{e.estimated} estimated, {e.actual} actual</span></div>
                 ))}
               </div>
             )}
@@ -78,15 +80,19 @@ export function ReportsTab({ report, isLoading, can, def }: { report: Report; is
             <RateTable title="By kind of work" rows={report.revenuePerManHour.byService} format={dollars} />
           </Section>
           <Section title="Win rate">
-            <div className="text-sm">{percent(report.winRate.overall)} of decided estimates won.</div>
+            <div className="text-sm">{report.winRate.overall === null || report.winRate.overall === undefined ? 'No estimate won or lost yet.' : `${percent(report.winRate.overall)} of decided estimates won.`}</div>
             <RateTable title="By price" rows={report.winRate.byPriceBand} format={(v) => percent(v)} />
             <RateTable title="By salesperson" rows={report.winRate.bySalesperson} format={(v) => percent(v)} />
             <RateTable title="By how booked we were when it was sent" rows={report.winRate.byBacklog} format={(v) => percent(v)} />
           </Section>
           <Section title="Price changes">
             <div className="text-sm">
-              {percent(report.overrides.share)} of priced work was changed by hand ({percent(report.overrides.lowerShare)} lower, {percent(report.overrides.higherShare)} higher).
-              {' '}Won: {percent(report.overrides.winOverridden)} with a change, {percent(report.overrides.winStandard)} without.
+              {report.overrides.share === null || report.overrides.share === undefined ? 'No priced work yet.' : (
+                <>
+                  {percent(report.overrides.share)} of priced work was changed by hand ({percent(report.overrides.lowerShare)} lower, {percent(report.overrides.higherShare)} higher).
+                  {report.overrides.winOverridden !== null && report.overrides.winOverridden !== undefined && <>{' '}Won: {percent(report.overrides.winOverridden)} with a change, {percent(report.overrides.winStandard)} without.</>}
+                </>
+              )}
             </div>
             <RateTable title="Reasons" rows={report.overrides.byReason} format={(v) => percent(v)} />
           </Section>

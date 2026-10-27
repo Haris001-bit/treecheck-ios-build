@@ -1,14 +1,21 @@
 // Large-company setup: publishing a rate card. Refuses while any blocking contradiction is open or the past-job check
 // is missing (unless the owner gives a reason), freezes the pay-plus-return selling rates into the card, takes the next
 // version number and archives the card it replaces. A published card never changes after this (PS1's trigger).
-// Never texts anyone. Maintained outside Lovable.
+// The jobber_* actions are the Jobber parts that wait on Jobber's approval (productionJobberExtras.ts): which
+// permissions the connection has, matching services and people, and adding the five quote fields. They answer 409
+// until production_rollout.jobber_extras is on. Never texts anyone. Maintained outside Lovable.
 import { z } from "npm:zod@3";
-import { productionCaller, productionEligible, productionCors, productionJson, todayIso } from "../_shared/productionAccess.ts";
-import { parseDefinition, PRICING_ENGINE_VERSION } from "../_shared/production/rules.ts";
+import { effectiveCard, productionCaller, productionEligible, productionCors, productionJson, todayIso } from "../_shared/productionAccess.ts";
+import { parseDefinition, PRICING_ENGINE_VERSION, type RateCardDefinition } from "../_shared/production/rules.ts";
 import { publishBlockers } from "../_shared/production/contradictions.ts";
 import { validatePastJobs } from "../_shared/production/validation.ts";
 import { deriveCostPlusRates } from "../_shared/production/costs.ts";
+import {
+  extrasSwitchOn, probeExtras, readExtras, saveServices, saveTeam, servicesPreview, setupQuoteFields, teamPreview,
+} from "../_shared/productionJobberExtras.ts";
 
+const id = z.string().min(1).max(200).regex(/^[A-Za-z0-9_=+/-]+$/);
+const Choice = (k: z.ZodString) => z.record(k, id.nullable()).refine((r) => Object.keys(r).length <= 200);
 const Body = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("publish"),
@@ -17,7 +24,22 @@ const Body = z.discriminatedUnion("action", [
     label: z.string().trim().max(120).optional(),
     skipReason: z.string().trim().max(300).optional(),
   }),
+  z.object({ action: z.literal("jobber_extras"), refresh: z.boolean().optional() }),
+  z.object({ action: z.literal("jobber_services") }),
+  z.object({ action: z.literal("jobber_services_save"), choice: Choice(z.string().min(1).max(60)) }),
+  z.object({ action: z.literal("jobber_team") }),
+  z.object({ action: z.literal("jobber_team_save"), choice: Choice(z.string().uuid()) }),
+  z.object({ action: z.literal("jobber_fields") }),
 ]);
+
+/** The services to match: the draft being set up, or else the card in force. */
+async function cardForMatching(admin: Parameters<typeof effectiveCard>[0], ownerId: string): Promise<RateCardDefinition | null> {
+  const { data: draft } = await admin.from("production_rate_cards").select("definition").eq("contractor_id", ownerId).eq("status", "draft")
+    .order("updated_at", { ascending: false }).limit(1);
+  const raw = draft?.[0]?.definition ?? (await effectiveCard(admin, ownerId, todayIso()))?.definition;
+  const parsed = raw ? parseDefinition(raw) : null;
+  return parsed && parsed.kind === "ok" ? parsed.def : null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: productionCors });
@@ -29,9 +51,29 @@ Deno.serve(async (req) => {
     if (!parsed.success) return productionJson({ error: "That request wasn't understood. Refresh and try again." }, 400);
     const body = parsed.data;
     if (!(await caller.can("setup")) || !(await productionEligible(caller))) {
-      return productionJson({ error: "Only someone who sets up the company's pricing can publish a rate card." }, 403);
+      return productionJson({ error: `Only someone who sets up the company's pricing can ${body.action === "publish" ? "publish a rate card" : "change the Jobber setup"}.` }, 403);
     }
     const { admin, ownerId } = caller;
+
+    if (body.action !== "publish") {
+      if (!(await extrasSwitchOn(admin))) return productionJson({ error: "This part of the Jobber setup opens once Jobber approves TreeCheck's app." }, 409);
+      const reply = (r: { ok: true } | { ok: false; error: string }) => productionJson(r, r.ok ? 200 : 409);
+      if (body.action === "jobber_extras") {
+        const saved = await readExtras(admin, ownerId);
+        const probe = body.refresh || !saved.probe ? await probeExtras(admin, ownerId) : saved.probe;
+        return productionJson({
+          ok: true, probe,
+          counts: { services: Object.keys(saved.productIds ?? {}).length, team: Object.keys(saved.userIds ?? {}).length, fields: Object.keys(saved.fieldIds ?? {}).length },
+        });
+      }
+      if (body.action === "jobber_team") return reply(await teamPreview(admin, ownerId));
+      if (body.action === "jobber_team_save") return reply(await saveTeam(admin, ownerId, body.choice));
+      if (body.action === "jobber_fields") return reply(await setupQuoteFields(admin, ownerId));
+      const def = await cardForMatching(admin, ownerId);
+      if (!def) return productionJson({ error: "Add your services first (step 2)." }, 409);
+      if (body.action === "jobber_services") return reply(await servicesPreview(admin, ownerId, def));
+      return reply(await saveServices(admin, ownerId, def, body.choice));
+    }
 
     const { data: card, error: cardError } = await admin.from("production_rate_cards")
       .select("id, contractor_id, status, label, branch_key, definition").eq("id", body.cardId).eq("contractor_id", ownerId).maybeSingle();

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { DEFAULT_BASICS } from '@/lib/production/client';
 import { Section, NumberField, TextField, ToggleRow } from './fields';
+import { JobberExtrasCard } from './JobberExtrasCard';
 import { keyFor } from './keys';
 import type { StepProps } from './types';
 
@@ -71,6 +72,7 @@ export function BasicsStep({ def, update, settings, updateSettings, status, memb
             checked={!!settings.send_unit_cost} onChange={(v) => updateSettings({ send_unit_cost: v })} />
         )}
       </Section>
+      <JobberExtrasCard status={status} />
       <p className="text-xs text-muted-foreground">Prices on this card: {def.services.filter((s) => s.offered !== false).length} services offered.</p>
     </div>
   );

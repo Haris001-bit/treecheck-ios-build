@@ -81,6 +81,8 @@ export const BIG_OAK_SETTINGS = {
     { key: 'lift', name: 'Lift', ownership: 'owned', units: 1, hoursPerDay: 6, leadTimeDays: 0 },
     { key: 'mini_skid', name: 'Mini skid', ownership: 'owned', units: 1, hoursPerDay: 8, leadTimeDays: 0 },
     { key: 'stump_grinder', name: 'Stump grinder', ownership: 'owned', units: 1, hoursPerDay: 8, leadTimeDays: 0 },
+    { key: 'chip_truck', name: 'Chip truck', ownership: 'owned', units: 2, hoursPerDay: 8, leadTimeDays: 0 },
+    { key: 'chipper', name: 'Chipper', ownership: 'owned', units: 2, hoursPerDay: 8, leadTimeDays: 0 },
     { key: 'crane', name: 'Crane', ownership: 'vendor', units: 1, hoursPerDay: 8, leadTimeDays: 5, restrictions: 'Book with the vendor a week ahead' },
   ],
   send_unit_cost: false,
@@ -170,14 +172,14 @@ export const DEMO_SPECS: DemoSpec[] = [
   {
     number: 1006, card: 2, daysAgo: 20, status: 'approved', sentDaysAgo: 19, approvedDaysAgo: 12, backlogAtSend: 2.2,
     customer: { name: 'Taylor Brooks', phone: '555-0106', email: 'taylor@example.com', address: '5 Orchard Way, Springfield', accessNotes: 'Lot clearing for a new garage' },
-    trees: [{ key: 't1', label: 'Lot clearing, 8 trees', location: 'Back lot' }],
+    trees: [{ key: 't1', label: 'Lot clearing, 22 trees', location: 'Back lot' }],
     items: [item('w1', 'removal', removal('crew4', 80, { dbh: 30, mini: true })), item('w2', 'stump', { stump_diameter: 30 })],
     work: { removal: { status: 'planned', inDays: 1, leader: true }, stump: { status: 'ready' } },
   },
   {
     number: 1007, card: 2, daysAgo: 14, status: 'approved', sentDaysAgo: 13, approvedDaysAgo: 9, backlogAtSend: 2.6, paymentPlanKey: 'deposit_30',
     customer: { name: 'Jamie Foster', phone: '555-0107', email: 'jamie@example.com', address: '2 Lakeview Dr, Springfield' },
-    trees: [{ key: 't1', label: 'Two oaks over the house', location: 'Side yard' }, { key: 't2', label: 'Replacement trees', location: 'Front yard' }],
+    trees: [{ key: 't1', label: 'Five oaks over the house', location: 'Side yard' }, { key: 't2', label: 'Replacement trees', location: 'Front yard' }],
     items: [
       item('w1', 'removal', removal('crew4', 48, { dbh: 38, crane: true, utility: 'line_drop' })),
       item('w2', 'planting', { type: 'shade', size: '3in', qty: 2 }, { treeKey: 't2', kind: 'recommended' }),
@@ -188,14 +190,14 @@ export const DEMO_SPECS: DemoSpec[] = [
   {
     number: 1008, card: 2, daysAgo: 9, status: 'approved', sentDaysAgo: 8, approvedDaysAgo: 5, backlogAtSend: 2.9,
     customer: { name: 'Quinn Harper', phone: '555-0108', email: 'quinn@example.com', address: '640 Magnolia St, Springfield' },
-    trees: [{ key: 't1', label: 'Five live oaks', location: 'Around the house' }],
+    trees: [{ key: 't1', label: 'Fourteen live oaks, full crown work', location: 'Around the property' }],
     items: [item('w1', 'pruning', { crew: 'crew3', hours: 48, dbh: 32, lift: true, access: 'easy' }), item('w2', 'dynamic_cable', { cables: 2 })],
     work: { pruning: { status: 'in_progress', inDays: 0, leader: true }, cabling: { status: 'planned', inDays: 8, leader: true } },
   },
   {
     number: 1009, card: 2, daysAgo: 5, status: 'approved', sentDaysAgo: 4, approvedDaysAgo: 2, backlogAtSend: 3.1,
     customer: { name: 'Drew Sullivan', phone: '555-0109', email: 'drew@example.com', address: '18 Hillcrest Rd, Springfield', accessNotes: 'Steep back yard' },
-    trees: [{ key: 't1', label: 'Two pecans', location: 'Rear yard' }],
+    trees: [{ key: 't1', label: 'Nine pecans and a hackberry', location: 'Rear yard' }],
     items: [item('w1', 'removal', removal('crew3', 64, { dbh: 34, access: 'rear_yard' })), item('w2', 'stump', { stump_diameter: 26 })],
     work: { removal: { status: 'ready' }, stump: { status: 'ready' } },
   },

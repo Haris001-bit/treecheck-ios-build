@@ -3,7 +3,8 @@
 // (cost viewers only). revise copies a sent estimate into a new draft; approve (by hand) creates the production packets;
 // lost records why; media signs one photo the estimate references; send makes the draft quote in Jobber (the office
 // sends it to the customer from Jobber), check finds a quote Jobber made without confirming it, and jobber says whether
-// the company has Jobber connected. Never texts anyone, never calls n8n or Scout's workflow. Maintained outside Lovable.
+// the company has Jobber connected; jobber_requests lists open Jobber requests to start from (approval extras, empty
+// while they are off). Never texts anyone, never calls n8n or Scout's workflow. Maintained outside Lovable.
 import { z } from "npm:zod@3";
 import {
   productionCaller, productionEligible, productionCors, productionJson, todayIso, effectiveCard, companySettings,
@@ -16,6 +17,7 @@ import { approvedItems, priceEstimate, type PricedItem } from "../_shared/produc
 import { costEstimate } from "../_shared/production/costs.ts";
 import { activeProfile } from "../_shared/production/profiles.ts";
 import { checkEstimate, sendEstimate, type SendOutcome } from "../_shared/productionJobber.ts";
+import { extrasSwitchOn, listRequests } from "../_shared/productionJobberExtras.ts";
 
 const key = z.string().min(1).max(60).regex(/^[A-Za-z0-9_-]+$/);
 const Item = z.object({
@@ -38,6 +40,8 @@ const Tree = z.object({
 const Customer = z.object({
   name: z.string().max(120).default(""), phone: z.string().max(40).default(""), email: z.string().max(200).default(""),
   address: z.string().max(300).default(""), gateCode: z.string().max(40).default(""), accessNotes: z.string().max(500).default(""),
+  // The Jobber request the estimate started from (approval extras): the quote names it when the extras are on.
+  jobberRequestId: z.string().max(200).regex(/^[A-Za-z0-9_=+/-]+$/).optional(),
 });
 const Body = z.discriminatedUnion("action", [
   z.object({
@@ -53,6 +57,7 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("send"), estimateId: z.string().uuid() }),
   z.object({ action: z.literal("check"), estimateId: z.string().uuid() }),
   z.object({ action: z.literal("jobber") }),
+  z.object({ action: z.literal("jobber_requests") }),
 ]);
 
 /** What the salesperson reads after Send to Jobber or Check Jobber. */
@@ -233,6 +238,13 @@ Deno.serve(async (req) => {
       if (!(await caller.can("price")) && !(await caller.can("dispatch"))) return productionJson({ error: "Not allowed." }, 403);
       const { data } = await admin.from("jobber_tokens").select("contractor_id").eq("contractor_id", ownerId).is("disconnected_at", null).maybeSingle();
       return productionJson({ ok: true, connected: !!data });
+    }
+    if (body.action === "jobber_requests") {
+      if (!(await caller.can("price"))) return productionJson({ error: "Only salespeople and the office start estimates." }, 403);
+      if (!(await extrasSwitchOn(admin))) return productionJson({ ok: true, on: false, requests: [] });
+      const r = await listRequests(admin, ownerId);
+      if (r.ok === false) return productionJson({ error: r.error }, 409);
+      return productionJson({ ok: true, on: true, requests: r.requests });
     }
     return productionJson({ error: "Unknown action" }, 400);
   } catch (e) {

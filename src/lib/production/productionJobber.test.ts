@@ -8,6 +8,7 @@ import {
   applyQuoteEvent, checkEstimate, productionJobberOn, refreshJob, refreshVisit, sendEstimate, UNCERTAIN_TEXT,
 } from '../../../supabase/functions/_shared/productionJobber';
 import { SWITCHES_OFF } from '../../../supabase/functions/_shared/jobberSwitches';
+import { extrasSwitchOn, listRequests, probeExtras, saveServices, setupQuoteFields } from '../../../supabase/functions/_shared/productionJobberExtras';
 import { priceSheetCard } from './testing/priceSheetFixture';
 import { priceEstimate, type EstimateItemInput } from './estimate';
 
@@ -191,6 +192,46 @@ describe('sendEstimate', () => {
     expect(creates[1].deposit).toEqual({ rate: 25, type: 'Percent' });
   });
 
+  it('with the approval extras on, adds the Jobber items, salesperson, request and fields, and drops them once if Jobber refuses', async () => {
+    const w = world({ salesperson_id: 'u-sam', customer: { name: 'Pat Example', address: '1 Test Lane, Edmond, OK 73034', jobberRequestId: 'R1' } });
+    w.tables.production_rollout[0].jobber_extras = true;
+    w.tables.production_settings[0].jobber = { productIds: { removal: 'PS1' }, userIds: { 'u-sam': 'J2' }, fieldIds: { link: 'F1', priority: 'F5' } };
+    const calls = stubJobber({
+      TC_ExtrasRequest: () => ok({ request: { id: 'R1', requestStatus: 'new', client: { id: 'C7' }, property: { id: 'P7' } } }),
+      TC_ClientProperties: () => ok({ client: { id: 'C7', clientProperties: { nodes: [{ id: 'P7', address: { street1: '1 Test Lane', street2: '', city: 'Edmond', province: 'OK', postalCode: '73034' } }] } } }),
+      TC_QuoteCreate: [
+        () => ok({ quoteCreate: { quote: null, userErrors: [{ message: 'Salesperson not found', path: ['salespersonId'] }] } }),
+        () => ok({ quoteCreate: { quote: { id: 'Q3', quoteNumber: 45 }, userErrors: [] } }),
+      ],
+      TC_ProductionQuote: () => ok({ quote: { id: 'Q3', lineItems: { nodes: [] } } }),
+    });
+    expect((await sendEstimate(w.db, { ownerId: OWNER, estimateId: 'est-1' }, deps)).state).toBe('sent');
+    const [first, second] = calls.filter((c) => c.op === 'TC_QuoteCreate').map((c) => c.vars.attributes as Row & { lineItems: Row[] });
+    expect(first).toMatchObject({ clientId: 'C7', propertyId: 'P7', requestId: 'R1', salespersonId: 'J2' });
+    expect(first.lineItems.map((l) => l.productOrServiceId)).toEqual(['PS1', undefined]);
+    expect(first.customFields).toEqual([
+      { customFieldConfigurationId: 'F1', valueLink: { text: 'Estimate #1001', url: 'https://app.treecheck.ai/dashboard/instant-estimator/crew/est-1' } },
+      { customFieldConfigurationId: 'F5', valueText: 'Normal' },
+    ]);
+    for (const k of ['requestId', 'salespersonId', 'customFields']) expect(second).not.toHaveProperty(k);
+    expect(second.lineItems.some((l) => 'productOrServiceId' in l)).toBe(false);
+  });
+
+  it('with the approval extras off, reads no request and adds nothing, even for an estimate started from one', async () => {
+    const w = world({ customer: { name: 'Pat Example', address: '1 Test Lane, Edmond, OK 73034', jobberRequestId: 'R1' } });
+    w.tables.production_settings[0].jobber = { productIds: { removal: 'PS1' } };
+    const calls = stubJobber({
+      ...newClient,
+      TC_QuoteCreate: () => ok({ quoteCreate: { quote: { id: 'Q4', quoteNumber: 46 }, userErrors: [] } }),
+      TC_ProductionQuote: () => ok({ quote: { id: 'Q4', lineItems: { nodes: [] } } }),
+    });
+    expect((await sendEstimate(w.db, { ownerId: OWNER, estimateId: 'est-1' }, deps)).state).toBe('sent');
+    expect(calls.map((c) => c.op)).not.toContain('TC_ExtrasRequest');
+    const attrs = calls.find((c) => c.op === 'TC_QuoteCreate')!.vars.attributes as Row & { lineItems: Row[] };
+    expect(attrs).not.toHaveProperty('requestId');
+    expect(attrs.lineItems.some((l) => 'productOrServiceId' in l)).toBe(false);
+  });
+
   it('never sends again by itself after an unconfirmed quote, and Check Jobber adopts the quote it finds', async () => {
     const w = world();
     stubJobber({ ...newClient, TC_QuoteCreate: () => ({ status: 502, body: {} }) });
@@ -356,5 +397,66 @@ describe('the hand-off from jobber-webhook', () => {
     expect(refuse).toBeLessThan(kill);
     expect(kill).toBeLessThan(text.indexOf('createClient(SUPABASE_URL, SERVICE'));
     expect(text.indexOf('productionJobberOn(admin, ownerId)')).toBeLessThan(text.indexOf('applyQuoteEvent(admin'));
+  });
+});
+
+describe('the approval extras in setup (productionJobberExtras.ts)', () => {
+  const extrasDeps = { token: async () => 'tok' };
+  const denied = () => ({ body: { errors: [{ message: 'Access denied: missing scope' }] } });
+
+  it('says which permissions the connection has, and saves it', async () => {
+    const w = world();
+    stubJobber({
+      TC_ExtrasProbeUsers: () => ok({ users: { nodes: [{ id: 'J1' }] } }),
+      TC_ExtrasProbeRequests: denied,
+      TC_ExtrasProbeProducts: () => ok({ products: { nodes: [] } }),
+      TC_ExtrasProbeFields: () => ({ status: 503, body: {} }),
+    });
+    const probe = await probeExtras(w.db, OWNER, extrasDeps, NOW);
+    expect(probe).toEqual({ connected: true, users: true, requests: false, products: true, customFields: null, checkedAt: new Date(NOW).toISOString() });
+    expect((w.tables.production_settings[0].jobber as Row).probe).toEqual(probe);
+    expect(await probeExtras(w.db, OWNER, { token: async () => null }, NOW)).toMatchObject({ connected: false, users: null });
+  });
+
+  it('adds the five quote fields once: reuses its own, brings back an archived one, makes the rest transferable and read-only', async () => {
+    const w = world();
+    const calls = stubJobber({
+      TC_ExtrasQuoteFields: () => ok({ customFieldConfigurations: { nodes: [
+        { id: 'F1', name: 'TreeCheck link', archived: false, valueType: 'LINK' },
+        { id: 'F5', name: 'Priority', archived: true, valueType: 'TEXT' },
+      ] } }),
+      TC_ExtrasFieldUnarchive: () => ok({ customFieldConfigurationUnarchive: { customFieldConfigurations: [{ __typename: 'CustomFieldConfigurationText' }], userErrors: [] } }),
+      TC_ExtrasFieldCreateText: (v) => ok({ customFieldConfigurationCreateText: { customFieldConfiguration: { id: `N-${(v.input as Row).name}` }, userErrors: [] } }),
+    });
+    expect(await setupQuoteFields(w.db, OWNER, extrasDeps)).toEqual({ ok: true, created: 3, reused: 2 });
+    expect(calls.find((c) => c.op === 'TC_ExtrasFieldUnarchive')!.vars).toEqual({ ids: ['F5'] });
+    expect(calls.filter((c) => c.op === 'TC_ExtrasFieldCreateText').map((c) => c.vars.input)).toEqual(
+      ['Production class', 'Required resources', 'Operational flags'].map((name) => ({ appliesTo: 'ALL_QUOTES', name, transferable: true, readOnly: true })),
+    );
+    expect((w.tables.production_settings[0].jobber as Row).fieldIds).toEqual({
+      link: 'F1', production_class: 'N-Production class', resources: 'N-Required resources', flags: 'N-Operational flags', priority: 'F5',
+    });
+  });
+
+  it('keeps only real services and real Jobber items when saving, and only open requests when listing', async () => {
+    const w = world();
+    stubJobber({
+      TC_ExtrasProducts: () => ok({ products: { nodes: [{ id: 'PS1', name: 'Tree removal' }], pageInfo: { hasNextPage: false, endCursor: null } } }),
+      TC_ExtrasRequests: () => ok({ requests: { nodes: [
+        { id: 'R1', requestStatus: 'new', createdAt: '2026-10-25T10:00:00Z', title: 'Big oak' },
+        { id: 'R2', requestStatus: 'converted', createdAt: '2026-10-26T10:00:00Z', title: 'Done' },
+      ] } }),
+    });
+    expect(await saveServices(w.db, OWNER, priceSheetCard(), { removal: 'PS1', stump: 'MADE-UP', nonsense: 'PS1' }, extrasDeps)).toEqual({ ok: true, saved: 1 });
+    expect((w.tables.production_settings[0].jobber as Row).productIds).toEqual({ removal: 'PS1' });
+    const listed = await listRequests(w.db, OWNER, extrasDeps, NOW);
+    expect(listed.ok && listed.requests.map((r) => r.id)).toEqual(['R1']);
+  });
+
+  it('stays off until the rollout switches it on', async () => {
+    const w = world();
+    expect(await extrasSwitchOn(w.db)).toBe(false);
+    w.tables.production_rollout[0].jobber_extras = true;
+    expect(await extrasSwitchOn(w.db)).toBe(true);
   });
 });
