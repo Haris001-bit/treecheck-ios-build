@@ -117,11 +117,8 @@ Deno.serve(async (req) => {
       : null;
     const cleanName = typeof fullName === "string" && fullName.trim() ? fullName.trim() : null;
 
-    // A sandbox (demo) company never invites, emails or texts real people.
-    if ((await companyMode(supabase, user.id)) === "sandbox") {
-      return new Response(JSON.stringify({ error: "The demo company can't invite team members." }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    // A sandbox (demo) company may invite real office teammates on purpose (Mark, 2026-10-27), with free seats.
+    const isSandbox = (await companyMode(supabase, user.id)) === "sandbox";
 
     // Founder bypass — anyone else needs paid seats
     const { data: profile } = await supabase
@@ -129,7 +126,7 @@ Deno.serve(async (req) => {
     const isFounder = !!profile?.is_founder;
     const company = profile?.company_name || profile?.full_name || "your team";
 
-    if (!isFounder) {
+    if (!isFounder && !isSandbox) {
       const { data: seats } = await supabase
         .from("team_seats").select("seat_quantity, status").eq("contractor_id", user.id).maybeSingle();
       const { count: usedCount } = await supabase
@@ -167,8 +164,8 @@ Deno.serve(async (req) => {
       .select().single();
     if (inviteErr) throw inviteErr;
 
-    const origin = req.headers.get("origin") || APP_URL;
-    const inviteUrl = `${origin}/accept-invite?team_token=${invitation.invite_token}`;
+    // Always the real app address: the sender's page may be a preview the invitee can't open.
+    const inviteUrl = `${APP_URL}/accept-invite?team_token=${invitation.invite_token}`;
 
     const mail = await sendEmail(
       cleanEmail,

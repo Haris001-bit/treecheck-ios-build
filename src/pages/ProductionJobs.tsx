@@ -25,6 +25,7 @@ import { useCompanySettings, usesSubs } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/lib/auth';
 import { dollars } from '@/lib/production/answers';
 import { RequestCrewBidsDialog, type RequestCrewBidsSeed } from '@/components/RequestCrewBidsDialog';
+import { actualsFromJobberNote, type ActualsFromJobber } from '@/lib/production/jobberExtras';
 import { PhotoStrip } from '@/components/production/estimate/PhotoStrip';
 
 const PACKET_STATUS: Record<string, string> = {
@@ -42,20 +43,45 @@ const message = (e: unknown) => (e instanceof Error ? e.message : 'Could not sav
 
 type Act = (body: Record<string, unknown>) => Promise<WorkReply | null>;
 
-/** The actual crew, hours and equipment, typed by the crew leader or the office when a job is done. */
-function ActualsForm({ packet, act, onDone }: { packet: PacketRow; act: Act; onDone: () => void }) {
+/**
+ * The actual crew, hours and equipment, typed by the crew leader or the office when a job is done. With the Jobber
+ * approval extras on, Jobber's time sheets fill them in (when Jobber closed the job, or on Fill from Jobber) to check.
+ */
+function ActualsForm({ packet, act, onDone, jobberTime }: { packet: PacketRow; act: Act; onDone: () => void; jobberTime: boolean }) {
   const a = packet.actuals ?? {};
-  const [headcount, setHeadcount] = useState(String(a.headcount ?? packet.crew?.headcount ?? ''));
-  const [hours, setHours] = useState(String(a.hours ?? packet.est_hours ?? ''));
-  const [manHours, setManHours] = useState(a.manHours !== undefined ? String(a.manHours) : '');
+  // Hours someone saved come first; otherwise what Jobber's time sheets suggested.
+  const saved = typeof a.manHours === 'number';
+  const fromJobber = saved ? null : a.fromJobber ?? null;
+  const start: { headcount?: number; hours?: number; manHours?: number; expenses?: number | null } = saved ? a : fromJobber ?? {};
+  const [headcount, setHeadcount] = useState(String(start.headcount ?? packet.crew?.headcount ?? ''));
+  const [hours, setHours] = useState(String(start.hours ?? packet.est_hours ?? ''));
+  const [manHours, setManHours] = useState(start.manHours !== undefined ? String(start.manHours) : '');
   const [equipment, setEquipment] = useState<Record<string, string>>(
     Object.fromEntries((packet.resources ?? []).map((r) => [r.key, String(a.equipment?.[r.key] ?? r.hours)])),
   );
-  const [expenses, setExpenses] = useState(a.expenses !== undefined && a.expenses !== null ? String(a.expenses) : '');
+  const [expenses, setExpenses] = useState(start.expenses !== undefined && start.expenses !== null ? String(start.expenses) : '');
   const [factors, setFactors] = useState<string[]>(a.factors ?? []);
   const [notes, setNotes] = useState(a.notes ?? '');
   const [busy, setBusy] = useState(false);
+  const [suggested, setSuggested] = useState<ActualsFromJobber | null>(fromJobber);
   const autoManHours = (Number(headcount) || 0) * (Number(hours) || 0);
+
+  const fillFromJobber = async () => {
+    setBusy(true);
+    try {
+      const r = await productionCall<{ actuals: ActualsFromJobber | null; message?: string | null }>('production-work', { action: 'jobber_actuals', packetId: packet.id });
+      if (!r.actuals) { toast.info(r.message ?? 'Jobber has no finished time on this job yet.'); return; }
+      setSuggested(r.actuals);
+      setHeadcount(String(r.actuals.headcount));
+      setHours(String(r.actuals.hours));
+      setManHours(String(r.actuals.manHours));
+      if (r.actuals.expenses !== null) setExpenses(String(r.actuals.expenses));
+    } catch (e) {
+      toast.error(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async (done: boolean) => {
     setBusy(true);
@@ -78,7 +104,11 @@ function ActualsForm({ packet, act, onDone }: { packet: PacketRow; act: Act; onD
 
   return (
     <div className="rounded-md border p-3 space-y-3">
-      <div className="font-medium text-sm">Actual crew and hours</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-medium text-sm">Actual crew and hours</div>
+        {jobberTime && <Button size="sm" variant="outline" disabled={busy} onClick={fillFromJobber}>Fill from Jobber</Button>}
+      </div>
+      {suggested && <p className="text-xs text-muted-foreground">{actualsFromJobberNote(suggested)}</p>}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         <div className="space-y-1"><Label className="text-xs" htmlFor={`hc-${packet.id}`}>Crew size</Label>
           <Input id={`hc-${packet.id}`} type="number" inputMode="numeric" min={0} max={30} value={headcount} onChange={(e) => setHeadcount(e.target.value)} /></div>
@@ -111,9 +141,9 @@ function ActualsForm({ packet, act, onDone }: { packet: PacketRow; act: Act; onD
   );
 }
 
-function PacketCard({ packet, siblings, leaders, userId, dispatch, isLeader, jobber, act, onSubBids }: {
+function PacketCard({ packet, siblings, leaders, userId, dispatch, isLeader, jobber, jobberTime, act, onSubBids }: {
   packet: PacketRow; siblings: PacketRow[]; leaders: { id: string; email: string; name?: string | null; owner?: boolean }[]; userId: string | undefined;
-  dispatch: boolean; isLeader: boolean; jobber: boolean; act: Act; onSubBids: (seed: RequestCrewBidsSeed) => void;
+  dispatch: boolean; isLeader: boolean; jobber: boolean; jobberTime: boolean; act: Act; onSubBids: (seed: RequestCrewBidsSeed) => void;
 }) {
   const [jobs, setJobs] = useState<{ id: string; jobNumber: string | null }[]>([]);
   const [open, setOpen] = useState(false);
@@ -270,11 +300,17 @@ function PacketCard({ packet, siblings, leaders, userId, dispatch, isLeader, job
               </Button>
             )}
           </div>
-          {actuals && canWork && <ActualsForm packet={packet} act={act} onDone={() => setActuals(false)} />}
-          {packet.actuals && !actuals && (
+          {actuals && canWork && <ActualsForm packet={packet} act={act} onDone={() => setActuals(false)} jobberTime={jobberTime && !!packet.jobber_job_id} />}
+          {!actuals && typeof packet.actuals?.manHours === 'number' && (
             <p className="text-xs text-muted-foreground">
-              Actual: {packet.actuals.headcount ?? 0}-person crew, {packet.actuals.hours ?? 0} hr, {packet.actuals.manHours ?? 0} man-hours
+              Actual: {packet.actuals.headcount ?? 0}-person crew, {packet.actuals.hours ?? 0} hr, {packet.actuals.manHours} man-hours
               {packet.actuals.factors?.length ? `, ${packet.actuals.factors.join(', ')}` : ''}
+            </p>
+          )}
+          {!actuals && typeof packet.actuals?.manHours !== 'number' && packet.actuals?.fromJobber && (
+            <p className="text-xs text-muted-foreground">
+              Jobber's time sheets: {packet.actuals.fromJobber.headcount}-person crew, {packet.actuals.fromJobber.hours} hr, {packet.actuals.fromJobber.manHours} man-hours.
+              {canWork ? ' Open the actual hours to check and save them.' : ' Waiting for the crew leader to check them.'}
             </p>
           )}
         </div>
@@ -374,7 +410,7 @@ export default function ProductionJobs() {
               : shown.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">{all.length ? 'Nothing here.' : 'Job packets appear here when a crew estimate is approved.'}</Card>
                 : shown.map((p) => (
                   <PacketCard key={p.id} packet={p} siblings={all.filter((s) => s.estimate_id === p.estimate_id && s.id !== p.id)} leaders={leaders.data ?? []} userId={user?.id}
-                    dispatch={can.dispatch} isLeader={can.field && p.crew_leader_id === user?.id} jobber={jobber.data === true} act={act} onSubBids={setSubsSeed} />
+                    dispatch={can.dispatch} isLeader={can.field && p.crew_leader_id === user?.id} jobber={jobber.data === true} jobberTime={status.jobber_extras} act={act} onSubBids={setSubsSeed} />
                 ))}
           </TabsContent>
         )}

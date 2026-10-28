@@ -22,7 +22,7 @@ import { completionDecision } from "./jobberStatus.ts";
 import { localDateOf } from "./freeDays.ts";
 import { activateEstimate } from "./productionActivate.ts";
 import { backlogNow, companySettings } from "./productionData.ts";
-import { quoteExtrasFor } from "./productionJobberExtras.ts";
+import { fillActualsFromJobber, quoteExtrasFor } from "./productionJobberExtras.ts";
 import { withQuoteExtras } from "./production/jobberExtras.ts";
 import { parseDefinition } from "./production/rules.ts";
 import type { PricedItem } from "./production/estimate.ts";
@@ -416,12 +416,16 @@ export async function refreshJob(admin: Admin, ownerId: string, jobId: string, d
     { workflowStatus: "open", completionSyncedAt: null, jobberCompletedAt: null },
   );
   let done = 0;
+  let fromTime = 0;
   if (decision === "complete") {
     const { data: finished } = await admin.from("production_packets").update({ status: "done", completed_at: job.completedAt ?? new Date((deps.now ?? Date.now)()).toISOString() })
       .in("id", ids).not("status", "in", "(done,cancelled)").select("id");
     done = finished?.length ?? 0;
+    // With the approval extras on, the job's time sheets become the suggested actual hours (never over saved ones).
+    fromTime = await fillActualsFromJobber(admin, ownerId, job.id, { token: async () => token }, (deps.now ?? Date.now)());
   }
-  return `job${number}: ${ids.length} packet${ids.length === 1 ? "" : "s"} linked${day ? `, scheduled ${day}` : ""}${done ? `, ${done} done (actual hours still to enter)` : decision === "cancelled" ? ", closed in Jobber with no visit done, left as is" : ""}`;
+  const hoursNote = fromTime ? `hours from Jobber's time sheets on ${fromTime} to check` : "actual hours still to enter";
+  return `job${number}: ${ids.length} packet${ids.length === 1 ? "" : "s"} linked${day ? `, scheduled ${day}` : ""}${done ? `, ${done} done (${hoursNote})` : decision === "cancelled" ? ", closed in Jobber with no visit done, left as is" : fromTime ? `, ${hoursNote}` : ""}`;
 }
 
 /** A visit event: the job it belongs to is read again. */

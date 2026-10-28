@@ -1145,7 +1145,7 @@ IMPORTANT: The brand voice guidelines above are the canonical source of truth fr
             });
           }
           if (aiResp.status === 402) {
-            return new Response(JSON.stringify({ error: "AI credits exhausted — top up Lovable AI" }), {
+            return new Response(JSON.stringify({ error: "Post writing is temporarily unavailable. Please try again later." }), {
               status: 402,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
@@ -1549,7 +1549,7 @@ IMPORTANT: The brand voice guidelines above are the canonical source of truth fr
         success: true,
         slug: project.slug,
         url: `https://timberedmond.com/projects/${project.slug}/`,
-        previewUrl: `https://timber-roots-ai.lovable.app/projects/${project.slug}/`,
+        previewUrl: `https://timberedmond.com/projects/${project.slug}/`,
         title: project.title,
         serviceCategory: project.serviceCategory,
         shortDescription: project.shortDescription,

@@ -25,8 +25,11 @@ import {
   guidanceOf,
   projectedPrice,
   INITIAL_LOOKBACK_DAYS,
+  isLargeMiss,
   localDate,
   localParts,
+  type Miss,
+  missesOf,
   newJobsFor,
   type RawJob,
   renderBlock,
@@ -186,6 +189,7 @@ export async function workOut(
   // Estimates made with guidance already hold its factor: the agent and the "would have priced" figure need it.
   const versions = await loadVersions(admin, [...fresh, ...earlier].map((c) => c.estimate.guidance_version).filter(isUuid));
   const applied = (c: Comparison) => appliedFactorOf(c, versions);
+  const labelled = fresh.map((c, i) => ({ label: `J${i + 1}`, c }));
   const input = {
     surface,
     run_kind: learning,
@@ -197,12 +201,14 @@ export async function workOut(
       week_start: r.week_start, kind: r.kind, status: r.status, avg_gap_pct: r.avg_gap_pct, changes: r.changes,
       undone: !!r.undone_at,
     })),
-    new_jobs: fresh.map((c, i) => agentJob(c, `J${i + 1}`, true, applied(c))),
+    new_jobs: labelled.map(({ c, label }) => agentJob(c, label, true, applied(c))),
     earlier_jobs: earlier.map((c, i) => agentJob(c, `E${i + 1}`, false, applied(c))),
   };
 
   const reply = await deps.agent(agentSystemPrompt(surface), input);
-  const report = { jobs: fresh.map((c) => reportJob(c)), avg_gap_pct: averageGap(fresh), model: MODEL };
+  // Why each large miss happened is its own question: kept whatever happens to the guidance below.
+  const misses = reply.ok ? missesOf(reply.answer, labelled) : new Map<string, Miss>();
+  const report = { jobs: fresh.map((c) => reportJob(c, null, misses.get(c.ref))), avg_gap_pct: averageGap(fresh), model: MODEL };
   if (!reply.ok) {
     const error = reply.status === 402 ? "AI credits are used up" : reply.status === 429 ? "the AI was busy"
       : `the AI call failed${reply.status ? ` (${reply.status})` : ""}: ${reply.error ?? ""}`;
@@ -232,7 +238,7 @@ export async function workOut(
     jobs: fresh,
     fields: {
       ...report,
-      jobs: unchanged ? report.jobs : fresh.map((c) => reportJob(c, projectedPrice(c, applied(c), proposed))),
+      jobs: unchanged ? report.jobs : fresh.map((c) => reportJob(c, projectedPrice(c, applied(c), proposed), misses.get(c.ref))),
       summary: `${checked.summary}${capped}`,
       changes: unchanged ? [] : describeChanges(current, proposed),
       guidance: unchanged ? current : proposed,
@@ -296,6 +302,71 @@ async function closeAbandoned(admin: Admin, now: Date): Promise<void> {
   }
 }
 
+/** Time an explanation may still need: one AI call (110 seconds at most) and the write. */
+const EXPLAIN_MS = 115_000;
+
+/**
+ * Explains the large misses of a report finished before misses were explained (2026-10-27), once, so the latest
+ * report on each company's card answers "why" too. Only the latest finished report of each company and estimator.
+ * Same prompt and checks as a run, with that report's own jobs; the rest of the answer is ignored, so the guidance
+ * never changes here. Writes only that report's jobs (service role, like scout_learning_finish): every job gets
+ * large_miss whatever the answer, so a report is never asked about twice. Returns what ran when it called the AI.
+ */
+async function explainOldReport(
+  admin: Admin, deps: Deps, companies: { company: string; surfaces: Surface[] }[],
+): Promise<string | null> {
+  for (const { company, surfaces } of companies) {
+    for (const surface of surfaces) {
+      const latest = (await loadRuns(admin, company, surface))
+        .find((r) => (r.kind === "initial" || r.kind === "weekly") && r.status !== "running");
+      if (!latest || (latest.status !== "rewritten" && latest.status !== "unchanged")) continue;
+      const jobs = Array.isArray(latest.jobs)
+        ? (latest.jobs as Record<string, unknown>[]).filter((j) => j && typeof j === "object")
+        : [];
+      if (!jobs.length || jobs.some((j) => "large_miss" in j)) continue;
+      let misses = new Map<string, Miss>();
+      let called = false;
+      if (jobs.some((j) => isLargeMiss(Number(j.gap_pct)))) {
+        const picks = jobs.map((j) => j.picked_on).filter((d): d is string => typeof d === "string").sort();
+        const since = addDays(picks[0] ?? localParts(deps.now).date, -INITIAL_LOOKBACK_DAYS - 14);
+        const all = new Map(buildComparisons(await loadJobs(admin, company, surface, since)).map((c) => [c.ref, c]));
+        // Only jobs that still read as the report shows them: a pick changed since would explain some other gap.
+        const found = jobs.flatMap((j) => {
+          const c = all.get(j.ref as string);
+          return c && c.gap_pct === Number(j.gap_pct) ? [c] : [];
+        });
+        if (found.some((c) => isLargeMiss(c.gap_pct))) {
+          const versions = await loadVersions(admin, found.map((c) => c.estimate.guidance_version).filter(isUuid));
+          const labelled = found.map((c, i) => ({ label: `J${i + 1}`, c }));
+          const reply = await deps.agent(agentSystemPrompt(surface), {
+            surface,
+            run_kind: latest.kind,
+            today: localDate(latest.finished_at) ?? localParts(deps.now).date,
+            estimator_rules_changed_on: RULES_CHANGED_ON[surface],
+            current_guidance: null,
+            last_change_undone: null,
+            past_weeks: [],
+            new_jobs: labelled.map(({ c, label }) => agentJob(c, label, true, appliedFactorOf(c, versions))),
+            earlier_jobs: [],
+          });
+          called = true;
+          if (reply.ok) misses = missesOf(reply.answer, labelled);
+          else console.warn("scout learning: explaining an earlier report failed", company.slice(0, 8), reply.status ?? "", reply.error ?? "");
+        }
+      }
+      const updated = jobs.map((j) => {
+        const miss = misses.get(j.ref as string);
+        return { ...j, large_miss: isLargeMiss(Number(j.gap_pct)), ...(miss ? { miss } : {}) };
+      });
+      const { error } = await admin.from("scout_learning_runs").update({ jobs: updated })
+        .eq("id", latest.id).eq("status", latest.status);
+      if (error) console.error("scout learning: saving the explanations failed", short(error.message));
+      if (called) return `explain ${surface}`;
+    }
+  }
+  return null;
+}
+
 /** One scheduled tick. Never throws. */
 export async function runTick(admin: Admin, deps: Deps): Promise<{ ran: string[] }> {
   const ran: string[] = [];
@@ -303,6 +374,7 @@ export async function runTick(admin: Admin, deps: Deps): Promise<{ ran: string[]
   const started = Date.now();
   const budget = deps.budgetMs ?? 140_000;
   let calls = 0;
+  const learning: { company: string; surfaces: Surface[] }[] = [];
   try {
     await closeAbandoned(admin, deps.now);
     // 1. A preview Haris asked for (SQL editor), oldest first; taken by exactly one tick.
@@ -330,6 +402,7 @@ export async function runTick(admin: Admin, deps: Deps): Promise<{ ran: string[]
         const { data: plan } = await admin.rpc("company_plan", { p_owner: company });
         if (plan !== "paid" && plan !== "trialing") continue;
         const surfaces: Surface[] = s.scout_learning_website ? ["scout", "website"] : ["scout"];
+        learning.push({ company, surfaces });
         for (const surface of surfaces) {
           if (calls >= 1 || Date.now() - started > budget) break;
           const initial = await oneRun(admin, company, surface, "initial");
@@ -355,6 +428,12 @@ export async function runTick(admin: Admin, deps: Deps): Promise<{ ran: string[]
       } catch (e) {
         console.warn("scout learning: company skipped", company.slice(0, 8), short(e));
       }
+    }
+
+    // 3. Only when this tick made no AI call: a report from before misses were explained gets them, once.
+    if (calls === 0 && Date.now() - started < budget - EXPLAIN_MS) {
+      const explained = await explainOldReport(admin, deps, learning);
+      if (explained) ran.push(explained);
     }
   } catch (e) {
     console.error("scout learning: tick failed", short(e));

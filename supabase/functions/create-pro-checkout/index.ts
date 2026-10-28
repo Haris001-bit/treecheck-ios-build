@@ -63,7 +63,7 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
-    const origin = req.headers.get("origin") || "https://trccai.lovable.app";
+    const origin = req.headers.get("origin") || "https://app.treecheck.ai";
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

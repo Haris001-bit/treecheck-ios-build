@@ -31,3 +31,4 @@
 - Non-website DMA content is generated and edited through dma-email-content and saved in dma_email_posts; email sends stay unavailable until verified sender infrastructure exists, because drafts must never be reported as delivered.
 <!-- LOVABLE:END -->
 - Signup consent is recorded only by the signup functions into communication_consents (append-only, service-role writes) using the server copy of the wording in supabase/functions/_shared/consent.ts, kept identical to src/lib/consent.ts; marketing consent stays optional and unchecked, because US texting law forbids making it a condition of signing up.
+- The Office team list loads through public.team_directory() (owner's own teammates, contact fields only), because profiles RLS lets users read only their own row; never widen profiles RLS for it.

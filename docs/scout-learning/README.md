@@ -52,5 +52,9 @@ Rollback: `sql/down/SL1_scout_learning.down.sql`. PGlite test: `tools\pgtest\tes
 - **The agent** (`openai/gpt-6-astra`, strict schema, nothing stored) proposes factors and rules; `checkAnswer` clamps factors to
   0.60 to 1.40 (a weekly run moves one at most 0.15), drops rules with money, percentages, multipliers, links or instructions, and
   refuses summaries with personal details. Customer names, addresses, phones and emails never reach the agent.
+- **Large misses** (Mark, 2026-10-27): every new job 15% or more above or below its pick (as the card rounds it) gets the agent's
+  likely reason, cause type and confidence, shown as "Why Scout missed" when the owner opens the job. `missesOf` keeps one only when
+  it fits that job (direction and gap) and holds no contact details, links or job ids. Explanations never change the guidance and
+  never fail a run. A latest report finished before this gets its large misses explained once, on a tick with no other AI call.
 - **Failures** (credits, busy, timeout, refused answer) finish as `failed`; the guidance stays; up to 3 attempts.
 - **One AI call per tick** at most.

@@ -17,14 +17,45 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Navigate } from 'react-router-dom';
 import { isNativeStoreBilling } from '@/lib/platform';
+import { TeamDirectory } from '@/components/TeamDirectory';
 import { useCompanyBilling } from '@/hooks/useCompanyBilling';
 import { CompanyTeamAccess } from '@/components/CompanyTeamAccess';
 
+/** Phone apps: the team list with call/text/email only. No seats, prices or invites (Apple 3.1.1, Google Play billing). */
+function NativeTeam() {
+  const { isTeamMember } = useAuth();
+  const { data: members = [], isLoading } = useTeamMembers();
+  if (isTeamMember) {
+    return (
+      <div className="p-6 max-w-2xl">
+        <Card>
+          <CardHeader><CardTitle>Team</CardTitle></CardHeader>
+          <CardContent>You're a team member. Only the company owner can manage the team.</CardContent>
+        </Card>
+      </div>
+    );
+  }
+  return (
+    <div className="p-4 sm:p-6 max-w-3xl space-y-4">
+      <h1 className="text-2xl font-bold">Office team</h1>
+      <Card>
+        <CardHeader><CardTitle>Team members ({members.length})</CardTitle></CardHeader>
+        <CardContent>
+          {isLoading ? <p className="text-sm text-muted-foreground">Loading team…</p> : <TeamDirectory members={members} />}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Team() {
-  // The phone apps manage no seats or Stripe billing; owners do that on the website.
-  if (isNativeStoreBilling()) return <Navigate to="/dashboard/subscription-info" replace />;
+  // The phone apps manage no seats or billing, so they get the price-free team list.
+  if (isNativeStoreBilling()) return <NativeTeam />;
+  return <WebTeam />;
+}
+
+function WebTeam() {
   const { user, isFounder, isTeamMember } = useAuth();
   const { data: seats } = useTeamSeats();
   const { data: members = [] } = useTeamMembers();
@@ -208,19 +239,15 @@ export default function Team() {
 
       <Card>
         <CardHeader><CardTitle>Active members ({members.length})</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {members.length === 0 && <p className="text-sm text-muted-foreground">No team members yet.</p>}
-          {members.map(m => (
-            <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
-                <div className="font-medium">{m.full_name || m.email}</div>
-                <div className="text-sm text-muted-foreground">{m.email}</div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
+        <CardContent>
+          <TeamDirectory
+            members={members}
+            action={(m) => (
+              <Button variant="ghost" size="sm" aria-label={`Remove ${m.full_name || m.email}`} onClick={() => remove.mutate(m.id)} disabled={remove.isPending}>
                 <Trash2 className="w-4 h-4" />
               </Button>
-            </div>
-          ))}
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -229,7 +256,7 @@ export default function Team() {
           <CardHeader><CardTitle>Pending invites ({invites.length})</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {invites.map(i => {
-              const url = `${window.location.origin}/accept-invite?team_token=${i.invite_token}`;
+              const url = `https://app.treecheck.ai/accept-invite?team_token=${i.invite_token}`;
               return (
                 <div key={i.id} className="flex items-center justify-between p-3 rounded-lg border">
                   <div>

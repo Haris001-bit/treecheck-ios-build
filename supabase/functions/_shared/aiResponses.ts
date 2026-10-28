@@ -69,7 +69,7 @@ export async function callResponses(c: AiCall, fetcher: typeof fetch = fetch): P
   if (!res.ok || !res.body) {
     const msg = await res.text().catch(() => "");
     console.error(`ai ${c.name}`, res.status, msg.slice(0, 400));
-    if (res.status === 402) return { kind: "error", status: 402, message: "AI credits are used up. Add credits in Lovable to keep using it." };
+    if (res.status === 402) return { kind: "error", status: 402, message: "This feature is temporarily unavailable. Please try again later." };
     if (res.status === 429) return { kind: "error", status: 429, message: "The AI is busy. Try again in a minute." };
     if (res.status === 400 || res.status === 413 || res.status === 415) return { kind: "error", status: 400, message: c.unreadable };
     return { kind: "error", status: 502, message: "The AI couldn't answer just now. Try again." };

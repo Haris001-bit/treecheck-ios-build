@@ -22,6 +22,15 @@ export interface LearnJob {
   crew?: LearnCrew | null;
   has_photo?: boolean;
   projected?: number;
+  /** Reports from 2026-10-27 on: whether the job missed by 15% or more, and why, when the AI could say. */
+  large_miss?: boolean;
+  miss?: LearnMiss | null;
+}
+
+export interface LearnMiss {
+  reason: string;
+  cause: string;
+  confidence: string;
 }
 
 export interface LearnCrew {
@@ -172,6 +181,19 @@ export function crewText(c: LearnCrew | null | undefined): string {
     c.mini_skid ? "mini skid" : "",
     c.equipment ?? "",
   ].filter(Boolean).join(", ");
+}
+
+const CAUSE_WORDS: Record<string, string> = {
+  tree_reading: "how Scout read the tree", disposal: "disposal loads", access: "access",
+  crew_requirements: "the crew and time the job needed", size: "the tree's size", pricing_level: "the overall price level",
+  owner_edit: "a price edit", insufficient_information: "unclear from the job details",
+};
+
+/** The line under a miss's explanation, e.g. "Likely cause: disposal loads. Confidence: medium." */
+export function missCauseText(m: LearnMiss): string {
+  const cause = CAUSE_WORDS[m.cause];
+  const sure = ["high", "medium", "low"].includes(m.confidence) ? `Confidence: ${m.confidence}.` : "";
+  return [cause ? `Likely cause: ${cause}.` : "", sure].filter(Boolean).join(" ");
 }
 
 /** The newest finished run, and whether a newer one is still being worked out. */

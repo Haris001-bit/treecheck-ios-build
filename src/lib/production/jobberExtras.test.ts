@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { priceSheetCard } from './testing/priceSheetFixture';
 import { priceEstimate, type EstimateItemInput } from './estimate';
 import { quoteCreateAttributes, quotePlan } from './quoteLines';
-import { matchServices, matchTeam, openRequests, quoteFieldValues, requestCustomer, withQuoteExtras, type JobberRequestNode } from './jobberExtras';
+import {
+  actualsFromJobber, actualsFromJobberNote, jobShares, matchServices, matchTeam, openRequests, quoteFieldValues, requestCustomer, withQuoteExtras,
+  type JobberRequestNode,
+} from './jobberExtras';
 import type { RateCardDefinition } from './rules';
 
 const DAY = '2026-10-26';
@@ -146,5 +149,39 @@ describe('withQuoteExtras', () => {
     const out = withQuoteExtras(base, plan, items, { productIds: {}, salespersonId: null, requestId: null, fieldIds: {}, fieldValues: null });
     expect(Object.keys(out).sort()).toEqual(Object.keys(base).sort());
     expect((out.lineItems as Record<string, unknown>[]).some((l) => 'productOrServiceId' in l)).toBe(false);
+  });
+});
+
+describe("actual hours from Jobber's time sheets", () => {
+  const READ = '2026-11-03T23:00:00.000Z';
+  const entry = (id: string, user: string | null, hours: number, ticking = false) => ({ id, finalDuration: Math.round(hours * 3600), ticking, user: user ? { id: user } : null });
+
+  it('counts finished time only: man-hours, the people who logged it, hours on site per person and the expenses', () => {
+    const a = actualsFromJobber(
+      [entry('a', 'U1', 5.1), entry('b', 'U2', 5), entry('c', 'U1', 0.9), entry('d', 'U3', 2, true), entry('e', 'U4', 0)],
+      [{ id: 'x', total: 45.5 }, { id: 'y', total: null }, { id: 'z', total: 0 }],
+      { readAt: READ, jobNumber: '7' },
+    );
+    expect(a).toEqual({ headcount: 2, hours: 5.5, manHours: 11, expenses: 45.5, entries: 3, people: 2, running: 1, share: 1, partial: false, jobNumber: '7', readAt: READ });
+  });
+
+  it("splits a Jobber job's time between its crew jobs by estimated man-hours, equally when none has an estimate", () => {
+    expect(jobShares([{ id: 'r', estManHours: 12 }, { id: 's', estManHours: 4 }])).toEqual({ r: 0.75, s: 0.25 });
+    expect(jobShares([{ id: 'r', estManHours: 0 }, { id: 's', estManHours: null }])).toEqual({ r: 0.5, s: 0.5 });
+    const part = actualsFromJobber([entry('a', 'U1', 8), entry('b', 'U2', 8)], [{ id: 'x', total: 100 }], { share: 0.25, readAt: READ });
+    expect(part).toMatchObject({ manHours: 4, headcount: 2, hours: 2, expenses: 25, share: 0.25 });
+  });
+
+  it('gives nothing when Jobber has no finished time and no expense, and counts time with no person as one', () => {
+    expect(actualsFromJobber([entry('a', 'U1', 3, true)], [], { readAt: READ })).toBeNull();
+    expect(actualsFromJobber([entry('a', null, 3)], [], { readAt: READ })).toMatchObject({ headcount: 1, hours: 3, people: 0, expenses: null });
+    expect(actualsFromJobber([], [{ id: 'x', total: 30 }], { readAt: READ })).toMatchObject({ headcount: 0, hours: 0, manHours: 0, expenses: 30 });
+  });
+
+  it('says where the hours came from', () => {
+    const a = actualsFromJobber([entry('a', 'U1', 4), entry('b', 'U1', 1, true)], [], { share: 0.5, partial: true, jobNumber: '12', readAt: READ })!;
+    expect(actualsFromJobberNote(a)).toBe(
+      "From Jobber's time sheets on job #12: 1 time entry by 1 person; this crew job's part (50%) of that Jobber job, split by the estimated hours; 1 timer is still running and left out; Jobber had more entries than TreeCheck read. Check them and save.",
+    );
   });
 });

@@ -6522,6 +6522,16 @@ export type Database = {
         Args: { p_bid_request_id: string; p_key: string }
         Returns: boolean
       }
+      team_directory: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          phone: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useNavigate, Navigate, useLocation } from "react-router-dom";
+import { useProfile } from '@/hooks/useProfile';
 import { Fragment } from "react";
 
 const SETTINGS_PATHS = ['/dashboard/start', '/dashboard/scout-rates', '/dashboard/how-we-work', '/dashboard/settings', '/dashboard/pay', '/dashboard/integrations', '/dashboard/profile'];
@@ -108,6 +109,7 @@ export default function DashboardLayout() {
   const jobsPath = crewJobs && (!subsOn || !production.can.dispatch) ? '/dashboard/bid-board/crew' : subsOn ? '/dashboard/bid-board' : null;
   const needsSetup = !isAdmin && !isTeamMember && !crewLoading && !isCrewOnly && !companyLoading && !company?.onboarding_completed_at;
   const { allowed: pulseAllowed } = usePulseAccess();
+  const isDemo = useProfile().data?.is_sandbox === true;
   // Free plan (Oklahoma owners): Scout and Marketing open their preview versions.
   const freePlan = useFreePlan();
   const onFreePlan = freePlan.data?.plan === 'free' && freePlan.data.is_owner === true;
@@ -136,7 +138,7 @@ export default function DashboardLayout() {
     if (jobsPath) items.push({ to: jobsPath, icon: ClipboardList, label: 'Jobs', activePaths: ['/dashboard/bid-board'] });
     items.push({ to: '/dashboard/instant-estimator', icon: Zap, label: 'Scout™', product: 'scout' as Product });
     items.push({ to: '/dashboard/dma', icon: Megaphone, label: 'Marketing', product: 'dma' as Product });
-    if (pulseAllowed && !isTeamMember) items.push({ to: '/dashboard/pulse', icon: LineChart, label: 'Pulse' });
+    if ((pulseAllowed || isDemo) && !isTeamMember) items.push({ to: '/dashboard/pulse', icon: LineChart, label: 'Pulse' });
     // Team members (e.g. LesLee) manage subs too; seat billing stays owner-only.
     if (!isTeamMember || subsOn) {
       items.push({ to: subsOn ? '/dashboard/crew-network' : '/dashboard/team', icon: Users, label: 'Subs' });
@@ -161,7 +163,7 @@ export default function DashboardLayout() {
       activePaths: SETTINGS_PATHS,
     });
     return items;
-  }, [isTeamMember, safeMode, effectiveContractorId, iap, storePlans, isCrew, isCrewOnly, hasAvailableLeads, subsOn, pulseAllowed, jobsPath]);
+  }, [isTeamMember, safeMode, effectiveContractorId, iap, storePlans, isCrew, isCrewOnly, hasAvailableLeads, subsOn, pulseAllowed, isDemo, jobsPath]);
 
   const openExternal = async (url: string) => {
     try {

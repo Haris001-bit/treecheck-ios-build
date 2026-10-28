@@ -8,7 +8,7 @@ import {
   applyQuoteEvent, checkEstimate, productionJobberOn, refreshJob, refreshVisit, sendEstimate, UNCERTAIN_TEXT,
 } from '../../../supabase/functions/_shared/productionJobber';
 import { SWITCHES_OFF } from '../../../supabase/functions/_shared/jobberSwitches';
-import { extrasSwitchOn, listRequests, probeExtras, saveServices, setupQuoteFields } from '../../../supabase/functions/_shared/productionJobberExtras';
+import { extrasSwitchOn, jobberActuals, listRequests, probeExtras, saveServices, setupQuoteFields } from '../../../supabase/functions/_shared/productionJobberExtras';
 import { priceSheetCard } from './testing/priceSheetFixture';
 import { priceEstimate, type EstimateItemInput } from './estimate';
 
@@ -336,6 +336,49 @@ describe('Jobber events', () => {
     expect(w.tables.production_packets.every((p) => p.jobber_job_id === null)).toBe(true);
   });
 
+  it("with the approval extras on, Jobber's time sheets become the suggested hours when it closes the job, never over saved ones", async () => {
+    const w = sent();
+    w.estimate().status = 'approved';
+    w.tables.production_packets.push(
+      { id: 'p1', contractor_id: OWNER, estimate_id: 'est-1', package_key: 'removal', status: 'scheduled', jobber_job_id: 'J1', est_man_hours: 12, actuals: null, scope: [{ tree: 'Front oak', service: 'Tree removal' }] },
+      { id: 'p2', contractor_id: OWNER, estimate_id: 'est-1', package_key: 'stump', status: 'scheduled', jobber_job_id: 'J1', est_man_hours: 4, actuals: { headcount: 2, hours: 2.5, manHours: 5 }, scope: [{ tree: 'Front oak', service: 'Stump grinding' }] },
+    );
+    const closed = () => ok({ job: { id: 'J1', jobNumber: 12, jobStatus: 'requires_invoicing', completedAt: '2026-11-03T22:00:00Z', quote: { id: 'Q1', jobs: { nodes: [{ id: 'J1' }] } }, visitsInfo: { incompleteTotal: 0 }, visits: { nodes: [{ id: 'V1', startAt: '2026-11-03T14:00:00-06:00', isComplete: true }] }, lineItems: { nodes: [] } } });
+    const time = () => ok({ job: {
+      id: 'J1', jobNumber: 12,
+      timeSheetEntries: { totalCount: 4, nodes: [
+        { id: 't1', finalDuration: 4 * 3600, ticking: false, user: { id: 'U1' } }, { id: 't2', finalDuration: 4 * 3600, ticking: false, user: { id: 'U2' } },
+        { id: 't3', finalDuration: 4 * 3600, ticking: false, user: { id: 'U3' } }, { id: 't4', finalDuration: 600, ticking: true, user: { id: 'U1' } },
+      ] },
+      expenses: { totalCount: 1, nodes: [{ id: 'x1', total: 80 }] },
+    } });
+
+    // Off: Jobber's time sheets aren't read.
+    const off = stubJobber({ TC_ProductionJob: closed, TC_ExtrasJobTime: time });
+    expect(await refreshJob(w.db, OWNER, 'J1', deps)).toBe('job #12: 2 packets linked, scheduled 2026-11-03, 2 done (actual hours still to enter)');
+    expect(off.map((c) => c.op)).not.toContain('TC_ExtrasJobTime');
+    expect(w.tables.production_packets[0].actuals).toBeNull();
+
+    w.tables.production_rollout[0].jobber_extras = true;
+    stubJobber({ TC_ProductionJob: closed, TC_ExtrasJobTime: time });
+    expect(await refreshJob(w.db, OWNER, 'J1', deps)).toBe("job #12: 2 packets linked, scheduled 2026-11-03, hours from Jobber's time sheets on 1 to check");
+    // p1 is 12 of the 16 estimated man-hours: 75% of 12 logged hours and of the $80 expense; the running timer is left out.
+    expect((w.tables.production_packets[0].actuals as Row).fromJobber).toEqual({
+      headcount: 3, hours: 3, manHours: 9, expenses: 60, entries: 3, people: 3, running: 1, share: 0.75, partial: false, jobNumber: '12', readAt: new Date(NOW).toISOString(),
+    });
+    expect((w.tables.production_packets[0].actuals as Row).manHours).toBeUndefined();
+    expect(w.tables.production_packets[1].actuals).toEqual({ headcount: 2, hours: 2.5, manHours: 5 });
+
+    // Read on request (Fill from Jobber), nothing saved; a job with no crew job linked, or gone from Jobber.
+    stubJobber({ TC_ExtrasJobTime: time });
+    const read = await jobberActuals(w.db, OWNER, 'J1', { token: async () => 'tok' }, NOW);
+    expect(read.ok && Object.keys(read.byPacket).sort()).toEqual(['p1', 'p2']);
+    expect(read.ok && read.byPacket.p2).toMatchObject({ manHours: 3, headcount: 3, hours: 1, expenses: 20, share: 0.25 });
+    expect(await jobberActuals(w.db, OWNER, 'J-OTHER', { token: async () => 'tok' }, NOW)).toEqual({ ok: true, byPacket: {} });
+    stubJobber({ TC_ExtrasJobTime: () => ok({ job: null }) });
+    expect(await jobberActuals(w.db, OWNER, 'J1', { token: async () => 'tok' }, NOW)).toEqual({ ok: false, error: 'That job is no longer in Jobber.' });
+  });
+
   it('a converted quote whose job arrives first is approved before its packets are linked', async () => {
     const w = sent();
     stubJobber({
@@ -411,9 +454,13 @@ describe('the approval extras in setup (productionJobberExtras.ts)', () => {
       TC_ExtrasProbeRequests: denied,
       TC_ExtrasProbeProducts: () => ok({ products: { nodes: [] } }),
       TC_ExtrasProbeFields: () => ({ status: 503, body: {} }),
+      TC_ExtrasProbeTimeSheets: () => ok({ timeSheetEntries: { nodes: [] } }),
+      TC_ExtrasProbeExpenses: denied,
     });
     const probe = await probeExtras(w.db, OWNER, extrasDeps, NOW);
-    expect(probe).toEqual({ connected: true, users: true, requests: false, products: true, customFields: null, checkedAt: new Date(NOW).toISOString() });
+    expect(probe).toEqual({
+      connected: true, users: true, requests: false, products: true, customFields: null, timeSheets: true, expenses: false, checkedAt: new Date(NOW).toISOString(),
+    });
     expect((w.tables.production_settings[0].jobber as Row).probe).toEqual(probe);
     expect(await probeExtras(w.db, OWNER, { token: async () => null }, NOW)).toMatchObject({ connected: false, users: null });
   });

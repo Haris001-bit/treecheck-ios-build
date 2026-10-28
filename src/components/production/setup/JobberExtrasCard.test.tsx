@@ -14,7 +14,7 @@ import { JobberExtrasCard } from './JobberExtrasCard';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
 let root: Root;
-const probe = (over: Record<string, unknown>) => ({ ok: true, probe: { connected: true, users: true, requests: true, products: true, customFields: true, ...over }, counts: { services: 2, team: 1, fields: 0 } });
+const probe = (over: Record<string, unknown>) => ({ ok: true, probe: { connected: true, users: true, requests: true, products: true, customFields: true, timeSheets: true, expenses: true, ...over }, counts: { services: 2, team: 1, fields: 0 } });
 const show = async (on: boolean) => {
   await act(async () => root.render(<MemoryRouter><JobberExtrasCard status={{ ...STATUS_OFF, jobber_extras: on }} /></MemoryRouter>));
 };
@@ -44,6 +44,14 @@ describe('JobberExtrasCard', () => {
     expect(host.textContent).toContain('Jobber needs to be reconnected once');
     expect(host.querySelector('a[href="/dashboard/integrations/jobber"]')?.textContent).toBe('Reconnect Jobber');
     expect(host.textContent).not.toContain('Match services');
+  });
+
+  it('keeps matching open when only time sheets or expenses are missing, and asks for the reconnect', async () => {
+    call.mockResolvedValue(probe({ timeSheets: false }));
+    await show(true);
+    expect(host.textContent).toContain('Time sheets');
+    expect(host.textContent).toContain('Reconnect Jobber');
+    expect(host.textContent).toContain('Services (2 matched)');
   });
 
   it('offers matching and the quote fields once every permission is there', async () => {

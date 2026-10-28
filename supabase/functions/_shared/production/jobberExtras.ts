@@ -234,3 +234,66 @@ export function withQuoteExtras(attributes: Record<string, unknown>, plan: Quote
     ...(customFields.length ? { customFields } : {}),
   };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Actual hours from Jobber's time sheets
+
+export interface JobberTimeEntry { id: string; finalDuration?: number | null; ticking?: boolean | null; user?: { id: string } | null }
+export interface JobberExpense { id: string; total?: number | null }
+/** What a Jobber job's time sheets and expenses say about one crew job. A suggestion: reports count it only once saved. */
+export interface ActualsFromJobber {
+  headcount: number; hours: number; manHours: number; expenses: number | null;
+  /** Time entries counted, people who logged time, and timers still running (left out). */
+  entries: number; people: number; running: number;
+  /** This crew job's part of the Jobber job (1 when the Jobber job is only this crew job). */
+  share: number;
+  /** Jobber had more entries or expenses than were read. */
+  partial: boolean;
+  jobNumber: string | null; readAt: string;
+}
+
+const quarter = (h: number) => Math.round(h * 4) / 4;
+const cents = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * Each crew job's part of a Jobber job, by estimated man-hours (equal parts when none has an estimate). The office can
+ * make one Jobber job from several crew jobs, and Jobber's time sheets can't say which hours went to which.
+ */
+export function jobShares(packets: { id: string; estManHours: number | null }[]): Record<string, number> {
+  const total = packets.reduce((s, p) => s + Math.max(0, Number(p.estManHours) || 0), 0);
+  return Object.fromEntries(packets.map((p) => [p.id, total > 0 ? Math.max(0, Number(p.estManHours) || 0) / total : 1 / packets.length]));
+}
+
+/**
+ * Actual crew, hours and expenses from a Jobber job's time entries and expenses: man-hours are the logged time (running
+ * timers left out), the crew is the people who logged it, and hours on site are man-hours per person. Null when Jobber
+ * holds no finished time and no expense for the job.
+ */
+export function actualsFromJobber(entries: JobberTimeEntry[], expenses: JobberExpense[], opts: {
+  share?: number; partial?: boolean; jobNumber?: string | null; readAt: string;
+}): ActualsFromJobber | null {
+  const share = opts.share ?? 1;
+  const running = entries.filter((e) => e.ticking === true).length;
+  const counted = entries.filter((e) => e.ticking !== true && (Number(e.finalDuration) || 0) > 0);
+  const spent = expenses.filter((x) => Number.isFinite(Number(x.total)) && Number(x.total) > 0);
+  if (!counted.length && !spent.length) return null;
+  const people = new Set(counted.map((e) => e.user?.id).filter(Boolean)).size;
+  const loggedHours = counted.reduce((s, e) => s + (Number(e.finalDuration) || 0), 0) / 3600;
+  const manHours = quarter(loggedHours * share);
+  const headcount = manHours > 0 ? Math.max(1, people) : 0;
+  return {
+    headcount, hours: headcount ? quarter(manHours / headcount) : 0, manHours,
+    expenses: spent.length ? cents(spent.reduce((s, x) => s + Number(x.total), 0) * share) : null,
+    entries: counted.length, people, running, share: Math.round(share * 1000) / 1000, partial: !!opts.partial,
+    jobNumber: opts.jobNumber ?? null, readAt: opts.readAt,
+  };
+}
+
+/** One line for the crew leader about where the suggested hours came from. */
+export function actualsFromJobberNote(a: ActualsFromJobber): string {
+  const parts = [`From Jobber's time sheets${a.jobNumber ? ` on job #${a.jobNumber}` : ''}: ${a.entries} time ${a.entries === 1 ? 'entry' : 'entries'} by ${a.people} ${a.people === 1 ? 'person' : 'people'}`];
+  if (a.share < 1) parts.push(`this crew job's part (${Math.round(a.share * 100)}%) of that Jobber job, split by the estimated hours`);
+  if (a.running) parts.push(`${a.running} ${a.running === 1 ? 'timer is' : 'timers are'} still running and left out`);
+  if (a.partial) parts.push('Jobber had more entries than TreeCheck read');
+  return `${parts.join('; ')}. Check them and save.`;
+}

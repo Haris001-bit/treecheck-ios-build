@@ -349,6 +349,63 @@ describe("fixes from the 2026-10-22 review", () => {
   });
 });
 
+describe("large misses: why each one happened (Mark, 2026-10-27)", () => {
+  // In the seed, J1 is the rep's job (2400 on 2000, +20%) and J2 the owner's (1300 on 1000, +30%).
+  const why = { job: "J2", direction: "high", gap_pct: 30, likely_reason: "Scout counted two disposal loads, and the crew's offer shows one.", cause_type: "disposal", confidence: "medium" };
+  const withWhy = (over: Record<string, unknown> = {}) => ({ ok: true, answer: { ...goodAnswer, large_misses: [why], ...over } });
+
+  it("a run keeps each accepted explanation on its report job, even when the rest of the answer is refused", async () => {
+    const t = seed();
+    const db = fakeDb(t, { [A]: "paid" }, () => clock);
+    await tick(db, withWhy());
+    const jobs = runsOf(t)[0].jobs as Row[];
+    expect(jobs.map((j) => [j.ref, j.large_miss, (j.miss as Row | undefined)?.cause])).toEqual([[id(12), true, undefined], [id(11), true, "disposal"]]);
+    const t2 = seed();
+    await tick(fakeDb(t2, { [A]: "paid" }, () => clock), withWhy({ summary: "Call 405-555-0100 about the job." }));
+    expect(runsOf(t2)[0]).toMatchObject({ status: "failed", active: false });
+    expect((runsOf(t2)[0].jobs as Row[])[1].miss).toMatchObject({ reason: why.likely_reason, confidence: "medium" });
+  });
+
+  it("a report from before explanations gets them once, on a tick with no other AI call, and its guidance stays", async () => {
+    const t = seed();
+    const db = fakeDb(t, { [A]: "paid" }, () => clock);
+    await tick(db);
+    const [run] = runsOf(t);
+    for (const j of run.jobs as Row[]) delete j.large_miss; // as the reports made before 2026-10-27 read
+    const before = { guidance: run.guidance, block: run.block, summary: run.summary, active: run.active };
+    clock = "2026-10-21T15:10:00Z";
+    expect(await tick(db, withWhy({ decision: "rewrite", factors: [{ service: "Tree Removal", size: "any", factor: 0.6, jobs: 9 }] }))).toEqual({ ran: ["explain scout"] });
+    const input = calls[1].input as { new_jobs: Row[]; current_guidance: unknown };
+    expect(input.new_jobs.map((j) => [j.id, j.large_miss])).toEqual([["J1", true], ["J2", true]]);
+    expect(input.current_guidance).toBeNull();
+    expect((run.jobs as Row[]).map((j) => [j.large_miss, !!j.miss])).toEqual([[true, false], [true, true]]);
+    expect(runsOf(t)).toHaveLength(1);
+    expect({ guidance: run.guidance, block: run.block, summary: run.summary, active: run.active }).toEqual(before);
+    clock = "2026-10-21T15:20:00Z";
+    expect(await tick(db, withWhy())).toEqual({ ran: [] });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("a failed explanation is not tried again; a report with no large miss needs no AI call", async () => {
+    const t = seed();
+    const db = fakeDb(t, { [A]: "paid" }, () => clock);
+    await tick(db);
+    const [run] = runsOf(t);
+    for (const j of run.jobs as Row[]) delete j.large_miss;
+    clock = "2026-10-21T15:10:00Z";
+    await tick(db, { ok: false, status: 429 });
+    expect((run.jobs as Row[]).map((j) => [j.large_miss, "miss" in j])).toEqual([[true, false], [true, false]]);
+    clock = "2026-10-21T15:20:00Z";
+    await tick(db, withWhy());
+    expect(calls).toHaveLength(2);
+    for (const j of run.jobs as Row[]) { delete j.large_miss; j.gap_pct = 5; }
+    clock = "2026-10-21T15:30:00Z";
+    await tick(db, withWhy());
+    expect(calls).toHaveLength(2);
+    expect((run.jobs as Row[]).every((j) => j.large_miss === false)).toBe(true);
+  });
+});
+
 describe("previews (asked for in the SQL editor)", () => {
   it("are worked out by the next tick, keep their proposed block and never go live, even with learning off", async () => {
     const t = seed();

@@ -14,6 +14,7 @@ export interface TeamMember {
   id: string;
   email: string;
   full_name: string | null;
+  phone: string | null;
   created_at: string;
 }
 
@@ -48,12 +49,10 @@ export function useTeamMembers() {
   return useQuery({
     queryKey: ['team-members', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, created_at')
-        .eq('parent_contractor_id', user!.id);
+      // profiles RLS only shows a user their own row; team_directory() returns the owner's teammates' contact details.
+      const { data, error } = await supabase.rpc('team_directory' as any);
       if (error) throw error;
-      return data as TeamMember[];
+      return (data ?? []) as unknown as TeamMember[];
     },
     enabled: !!user,
   });

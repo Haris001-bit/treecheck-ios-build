@@ -5,6 +5,7 @@ import { functionFailure } from '@/lib/functionFailure';
 import { productionDb, type SettingsRow } from '@/lib/production/client';
 import { parseDefinition, type RateCardDefinition } from '@/lib/production/rules';
 import { today } from '@/components/production/setup/types';
+import type { ActualsFromJobber } from '@/lib/production/jobberExtras';
 
 export async function productionCall<T>(fn: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(fn, { body });
@@ -53,7 +54,8 @@ export interface PacketRow {
   scheduling_class: string; promised_window?: { from?: string | null; to?: string | null } | null;
   depends_on: string[]; status: string; planned_date: string | null; scheduled_date: string | null; completed_at?: string | null;
   crew_leader_id: string | null; jobber_job_id?: string | null; jobber_job_number?: string | null; tasks: { key: string; kind: string; title: string; status: string; dueAt?: string | null }[];
-  actuals: { headcount?: number; hours?: number; manHours?: number; equipment?: Record<string, number>; expenses?: number | null; factors?: string[]; notes?: string } | null;
+  /** Hours someone saved; fromJobber alone is what Jobber's time sheets suggested, not yet checked (reports skip it). */
+  actuals: { headcount?: number; hours?: number; manHours?: number; equipment?: Record<string, number>; expenses?: number | null; factors?: string[]; notes?: string; fromJobber?: ActualsFromJobber | null } | null;
   updated_at: string;
 }
 

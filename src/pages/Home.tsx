@@ -13,6 +13,7 @@ import { BusinessSummary } from '@/components/home/BusinessSummary';
 import { useIsCrewOnly } from '@/hooks/useCrew';
 import { isRecentJob } from '@/hooks/useJobViews';
 import { useFreePlan } from '@/hooks/useFreePlan';
+import { useProfile } from '@/hooks/useProfile';
 import { BusinessLocationForm } from '@/components/free/BusinessLocationForm';
 
 export const HOME_SEEN_KEY = 'home-seen-session';
@@ -193,13 +194,16 @@ export default function Home() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { isCrewOnly, loading } = useIsCrewOnly();
+  const { data: profile, isLoading: profileLoading } = useProfile();
   useEffect(() => {
     if (loading || isCrewOnly || !user) return;
     try { sessionStorage.setItem(HOME_SEEN_KEY, '1'); } catch { /* ignore */ }
   }, [loading, isCrewOnly, user]);
-  if (loading) return <div className="flex justify-center p-8" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  if (loading || profileLoading) return <div className="flex justify-center p-8" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (isCrewOnly) return <Navigate to="/dashboard/crew-bids" replace />;
   if (!user) return null;
+  // Demo (sandbox) logins always show the fictional sample numbers so demos look like a busy company.
+  if (profile?.is_sandbox) return <HomeAdvertisementSample demo />;
   if (searchParams.get('sample') === '1') return <HomeAdvertisementSample />;
   const today = new Date();
   return (

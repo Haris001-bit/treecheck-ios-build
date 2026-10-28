@@ -43,6 +43,23 @@ describe('contradictions', () => {
     const blockers = publishBlockers(starterDefinition());
     expect(blockers.filter((b) => b.kind === 'unpriced').length).toBeGreaterThanOrEqual(10);
   });
+  it("a switched-off service raises nothing, so a company that doesn't sell memberships can still publish", () => {
+    const def = starterDefinition();
+    const membership = def.services.find((s) => s.strategy.kind === 'recurring_plan')!;
+    expect(publishBlockers(def).filter((c) => c.serviceKey === membership.key).map((c) => c.kind)).toContain('membership');
+    membership.offered = false;
+    expect(findContradictions(def).filter((c) => c.serviceKey === membership.key)).toEqual([]);
+    for (const s of def.services) s.offered = false;
+    expect(publishBlockers(def)).toEqual([]);
+
+    // The matrix message's own advice works: a size it doesn't sell stops mattering once the service is off.
+    const sheet = priceSheetCard();
+    const planting = sheet.services.find((s) => s.key === 'planting')!;
+    if (planting.strategy.kind === 'matrix') delete planting.strategy.cells['shade|4in'];
+    expect(findContradictions(sheet).some((c) => c.kind === 'matrix')).toBe(true);
+    planting.offered = false;
+    expect(findContradictions(sheet).some((c) => c.kind === 'matrix')).toBe(false);
+  });
 });
 
 describe('starter rate card', () => {

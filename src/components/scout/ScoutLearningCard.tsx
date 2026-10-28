@@ -13,19 +13,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useScoutLearning } from "@/hooks/useScoutLearning";
 import {
-  crewText, dateLabel, factorSentence, gapText, INTRO, latestRun, overallGap, PENDING, projectedGap, runTitle, statusLine,
-  TEAM_OFF, UNDO_CONFIRM, usd, type LearningReport, type LearnJob, type SurfaceReport,
+  crewText, dateLabel, factorSentence, gapText, INTRO, latestRun, missCauseText, overallGap, PENDING, projectedGap, runTitle,
+  statusLine, TEAM_OFF, UNDO_CONFIRM, usd, type LearningReport, type LearnJob, type SurfaceReport,
 } from "./scoutLearningText";
 
 type Surface = "scout" | "website";
 /** Signed photo links by job (capture id), from scout-learning-photos. */
 export type JobPhotos = Record<string, string>;
 
-/** One job of a report; tap it for its photo, Scout's own notes and the crew's numbers. */
+/** One job of a report; tap it for why Scout missed, its photo, Scout's own notes and the crew's numbers. */
 function JobRow({ job, photo, onOpen }: { job: LearnJob; photo?: string; onOpen?: () => void }) {
   const [open, setOpen] = useState(false);
   const crew = crewText(job.crew);
-  const hasDetails = !!(job.notes || crew || job.has_photo);
+  const miss = job.miss?.reason ? job.miss : null;
+  const hasDetails = !!(miss || job.notes || crew || job.has_photo);
   return (
     <li className="py-2 border-b last:border-b-0">
       <button type="button" className="w-full text-left" disabled={!hasDetails}
@@ -47,6 +48,13 @@ function JobRow({ job, photo, onOpen }: { job: LearnJob; photo?: string; onOpen?
       </button>
       {open && (
         <div className="mt-2 space-y-2 text-xs">
+          {miss && (
+            <div>
+              <div className="font-medium">Why Scout missed</div>
+              <p className="text-muted-foreground">{miss.reason}</p>
+              {missCauseText(miss) && <p className="text-muted-foreground mt-0.5">{missCauseText(miss)}</p>}
+            </div>
+          )}
           {photo && <img src={photo} alt="The tree" className="w-full max-h-48 object-cover rounded-md border" loading="lazy" />}
           {crew && <p><span className="font-medium">Crew's offer:</span> {crew}</p>}
           {job.notes && (

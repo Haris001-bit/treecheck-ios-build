@@ -2,12 +2,12 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight, LineChart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export function HomeAdvertisementSample() {
+export function HomeAdvertisementSample({ demo = false }: { demo?: boolean }) {
   return <div className="home-workspace min-h-[calc(100svh-4rem)] bg-background text-foreground font-normal">
     <div className="mx-auto max-w-5xl px-5 pb-4 sm:px-9 lg:px-12">
       <header className="flex items-center justify-between border-b border-border py-3">
         <div><p className="text-xs text-primary">TREECHECK</p><h1 className="mt-1 text-2xl font-light">Business is growing.</h1></div>
-        <Button asChild variant="ghost" size="icon" title="Return to live Home"><Link to="/dashboard/home" aria-label="Return to live Home"><X className="h-4 w-4" /></Link></Button>
+        {!demo && <Button asChild variant="ghost" size="icon" title="Return to live Home"><Link to="/dashboard/home" aria-label="Return to live Home"><X className="h-4 w-4" /></Link></Button>}
       </header>
       <section aria-label="Booked vs sold" className="py-4">
         <h2 className="mb-3 text-sm font-normal text-muted-foreground">Booked vs sold · month to date</h2>

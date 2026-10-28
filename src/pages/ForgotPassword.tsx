@@ -17,18 +17,21 @@ export default function ForgotPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Inside the phone app the origin is an internal app address that email links can't open.
-    const origin = window.location.origin.startsWith('http') && !window.location.origin.includes('localhost')
-      ? window.location.origin
-      : 'https://app.treecheck.ai';
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${origin}/reset-password`,
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message || 'Could not send the reset email');
-      return;
+    // TreeCheck sends the reset email itself; the built-in sender is only a fallback if that fails.
+    const { data, error: fnError } = await supabase.functions.invoke('send-password-reset', { body: { email: email.trim() } });
+    if (fnError || !data?.ok) {
+      if (data?.error) { setLoading(false); toast.error(data.error); return; }
+      // Always the real app address: the phone app and preview addresses can't be opened from an email.
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'https://app.treecheck.ai/reset-password',
+      });
+      if (error) {
+        setLoading(false);
+        toast.error(error.message || 'Could not send the reset email');
+        return;
+      }
     }
+    setLoading(false);
     setSent(true);
   };
 

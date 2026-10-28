@@ -1,12 +1,14 @@
 // Large-company setup: production packets after a sale. The office assigns a crew leader and a planned day, and moves
 // packets along; the crew leader of a packet ticks its tasks, starts and finishes it, and types the actual hours. Every
 // change checks the packet hasn't changed since it was read, so two people never overwrite each other. The office can
-// read the estimate's Jobber quote and jobs again (refresh) and link a packet to one of those jobs (link_job). Packets
-// carry no price. Never texts anyone. Maintained outside Lovable.
+// read the estimate's Jobber quote and jobs again (refresh) and link a packet to one of those jobs (link_job). With the
+// Jobber approval extras on, jobber_actuals reads the linked Jobber job's time sheets to fill in the actual hours.
+// Packets carry no price. Never texts anyone. Maintained outside Lovable.
 import { z } from "npm:zod@3";
 import { productionCaller, productionEligible, productionCors, productionJson, pathInCompany, MEDIA_BUCKET } from "../_shared/productionAccess.ts";
 import { linkPacket, productionKillOn, refreshEstimate } from "../_shared/productionJobber.ts";
 import { killSwitchOn } from "../_shared/jobberSwitches.ts";
+import { extrasSwitchOn, jobberActuals } from "../_shared/productionJobberExtras.ts";
 
 const STATUSES = ["ready", "planned", "scheduled", "in_progress", "done", "cancelled"] as const;
 const LEADER_STATUSES = ["in_progress", "done"];
@@ -31,6 +33,7 @@ const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("leaders") }),
   z.object({ action: z.literal("refresh"), packetId: z.string().uuid() }),
   z.object({ action: z.literal("link_job"), packetId: z.string().uuid(), jobId: z.string().regex(/^[A-Za-z0-9_=+/-]{1,200}$/).nullable() }),
+  z.object({ action: z.literal("jobber_actuals"), packetId: z.string().uuid() }),
 ]);
 
 const STALE = { error: "Someone else just changed this. Refresh and try again." };
@@ -62,7 +65,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: packet } = await admin.from("production_packets")
-      .select("id, estimate_id, crew_leader_id, status, tasks, scope, updated_at").eq("id", body.packetId).eq("contractor_id", ownerId).maybeSingle();
+      .select("id, estimate_id, crew_leader_id, status, tasks, scope, actuals, jobber_job_id, updated_at").eq("id", body.packetId).eq("contractor_id", ownerId).maybeSingle();
     if (!packet) return productionJson({ error: "That job packet wasn't found." }, 404);
     const dispatch = await caller.can("dispatch");
     const leader = packet.crew_leader_id === userId && (await caller.can("field"));
@@ -103,12 +106,26 @@ Deno.serve(async (req) => {
 
     if (body.action === "actuals") {
       if (!dispatch && !leader) return productionJson({ error: "Only the office or this job's crew leader can enter the actual hours." }, 403);
-      const patch: Record<string, unknown> = { actuals: { ...body.actuals, enteredBy: userId, enteredAt: new Date().toISOString() } };
+      // What Jobber's time sheets said stays beside the saved hours, so the two can be compared later.
+      const fromJobber = (packet.actuals as { fromJobber?: unknown } | null)?.fromJobber;
+      const patch: Record<string, unknown> = { actuals: { ...body.actuals, ...(fromJobber ? { fromJobber } : {}), enteredBy: userId, enteredAt: new Date().toISOString() } };
       if (body.done) { patch.status = "done"; patch.completed_at = new Date().toISOString(); }
       const { data, error } = await admin.from("production_packets").update(patch).eq("id", packet.id).eq("updated_at", body.expectedUpdatedAt).select("id, updated_at");
       if (error) throw new Error(`actuals failed: ${error.message}`);
       if (!data?.length) return productionJson(STALE, 409);
       return productionJson({ ok: true, updatedAt: data[0].updated_at });
+    }
+
+    if (body.action === "jobber_actuals") {
+      if (!dispatch && !leader) return productionJson({ error: "Only the office or this job's crew leader can enter the actual hours." }, 403);
+      if (killSwitchOn() || productionKillOn() || !(await extrasSwitchOn(admin))) {
+        return productionJson({ error: "Reading Jobber's time sheets opens once Jobber approves TreeCheck's app." }, 409);
+      }
+      if (!packet.jobber_job_id) return productionJson({ error: "This job isn't linked to a Jobber job yet." }, 409);
+      const r = await jobberActuals(admin, ownerId, packet.jobber_job_id as string);
+      if (r.ok === false) return productionJson({ error: r.error }, 409);
+      const actuals = r.byPacket[packet.id] ?? null;
+      return productionJson({ ok: true, actuals, message: actuals ? null : "Jobber has no finished time or expense on this job yet." });
     }
 
     if (body.action === "status") {

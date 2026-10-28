@@ -12,6 +12,7 @@ const OWNER = 'aaaaaaaa-0000-0000-0000-000000000001';
 const state = vi.hoisted(() => ({
   status: null as unknown as ProductionStatus,
   data: null as unknown,
+  fresh: true,
   ensure: vi.fn(),
   publish: vi.fn(),
   saveDefinition: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('@/lib/auth', () => ({ useAuth: () => ({ user: { id: OWNER, email: 'owne
 vi.mock('@/hooks/useProductionStatus', () => ({ useProductionStatus: () => ({ status: state.status, isLoading: false }) }));
 vi.mock('@/hooks/useProductionSetup', () => ({
   useProductionSetup: () => ({
-    data: state.data, isLoading: false, owner: OWNER, ensure: state.ensure, publish: state.publish,
+    data: state.data, isLoading: false, isFetchedAfterMount: state.fresh, owner: OWNER, ensure: state.ensure, publish: state.publish,
     saveDefinition: state.saveDefinition, saveSettings: vi.fn(), importSheet: vi.fn(), refresh: vi.fn(),
   }),
 }));
@@ -54,6 +55,7 @@ const click = async (b: HTMLElement | undefined) => { await act(async () => { b?
 beforeEach(() => {
   state.status = ELIGIBLE;
   state.data = withDraft(starterDefinition());
+  state.fresh = true;
   state.ensure.mockReset();
   state.publish.mockReset().mockResolvedValue({ ok: true, version: 1 });
   state.saveDefinition.mockReset().mockResolvedValue(undefined);
@@ -113,5 +115,58 @@ describe('Crews & pricing', () => {
     expect(publish.disabled).toBe(false);
     await click(publish);
     expect(state.publish).toHaveBeenCalledWith(expect.objectContaining({ cardId: 'card-1', skipReason: 'New company', effectiveFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }));
+  });
+});
+
+describe('Crews & pricing keeps every edit', () => {
+  const offeredSwitches = () => [...host.querySelectorAll('button[role=switch]')].filter((b) => b.getAttribute('data-state') === 'checked') as HTMLElement[];
+  const savedOffered = (call: unknown[]) => (call[1] as ReturnType<typeof starterDefinition>).services.filter((s) => s.offered !== false).length;
+  const wait = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('opened again, it shows the draft from a fresh read, not the copy it loaded the first time', async () => {
+    // The cached copy still has the membership; the saved draft no longer does.
+    state.fresh = false;
+    await show();
+    expect(host.textContent).toContain('Loading');
+    expect(buttonByText('2. Services')).toBeUndefined();
+    const saved = starterDefinition();
+    saved.services = saved.services.filter((s) => s.strategy.kind !== 'recurring_plan');
+    state.data = withDraft(saved);
+    state.fresh = true;
+    await show();
+    await click(buttonByText('8. Open items'));
+    expect(host.textContent).toContain('open item');
+    expect(host.textContent).not.toContain('map the initial and monthly payments');
+  });
+
+  it('an edit made while a save is running gets saved too', async () => {
+    vi.useFakeTimers();
+    let finish: () => void = () => {};
+    state.saveDefinition.mockReset().mockImplementationOnce(() => new Promise<void>((r) => { finish = r; })).mockResolvedValue(undefined);
+    await show();
+    await click(buttonByText('2. Services'));
+    const total = offeredSwitches().length;
+    await click(offeredSwitches()[0]);
+    await wait(800);
+    expect(state.saveDefinition).toHaveBeenCalledTimes(1);
+    await click(offeredSwitches()[0]); // while the first save is still running
+    await act(async () => { finish(); });
+    await wait(800);
+    expect(state.saveDefinition).toHaveBeenCalledTimes(2);
+    expect(savedOffered(state.saveDefinition.mock.calls[1])).toBe(total - 2);
+  });
+
+  it('leaving the page within the wait still saves the last edit', async () => {
+    vi.useFakeTimers();
+    await show();
+    await click(buttonByText('2. Services'));
+    const total = offeredSwitches().length;
+    await click(offeredSwitches()[0]);
+    expect(state.saveDefinition).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    root = createRoot(host); // afterEach unmounts again
+    expect(state.saveDefinition).toHaveBeenCalledTimes(1);
+    expect(savedOffered(state.saveDefinition.mock.calls[0])).toBe(total - 1);
   });
 });

@@ -8,7 +8,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/lib/auth", () => ({ useAuth: () => ({ user: { id: "owner-1" }, effectiveContractorId: "owner-1" }) }));
 
 import { ScoutLearningView } from "./ScoutLearningCard";
-import { factorSentence, gapText, latestRun, overallGap, runTitle, statusLine, type LearningReport, type LearnRun } from "./scoutLearningText";
+import { factorSentence, gapText, latestRun, missCauseText, overallGap, runTitle, statusLine, type LearningReport, type LearnRun } from "./scoutLearningText";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -129,6 +129,19 @@ describe("the report's details (promised in the 2026-10-08 scope)", () => {
     expect(host.textContent).toContain("OBSERVATIONS: one trunk, 2 loads");
     expect(host.querySelector("img")?.getAttribute("src")).toBe("https://example.test/photo.jpg");
     expect(asked).toBe(1);
+  });
+
+  it("a large miss shows why Scout missed first, with the likely cause and how sure it is (Mark, 2026-10-27)", () => {
+    const missed = run({ jobs: [{ ...run().jobs[0], large_miss: true, miss: { reason: "No trunk size was given, so Scout judged it from the photo and placed it a size too large.", cause: "size", confidence: "medium" } }, run().jobs[1]] });
+    show(on({ scout: { ...on().scout!, runs: [missed] } }));
+    expect(host.textContent).not.toContain("Why Scout missed");
+    const [first, second] = [...host.querySelectorAll("li button")] as HTMLButtonElement[];
+    act(() => first.click());
+    expect(host.textContent).toContain("Why Scout missedNo trunk size was given, so Scout judged it from the photo");
+    expect(host.textContent).toContain("Likely cause: the tree's size. Confidence: medium.");
+    expect(second.disabled).toBe(true);
+    expect(missCauseText({ reason: "x", cause: "insufficient_information", confidence: "low" })).toBe("Likely cause: unclear from the job details. Confidence: low.");
+    expect(missCauseText({ reason: "x", cause: "other", confidence: "high" })).toBe("Confidence: high.");
   });
 
   it("a change shows what Scout would have priced the same jobs at", () => {

@@ -11,7 +11,7 @@ import { calculatePricing, money } from '@/lib/bidPricing';
 import { climberPayFromQuote } from '@/lib/payroll';
 import { toPricingInput, withBidExtras, type StoredPricingInputs } from '@/lib/bidPricingInputs';
 import { JobCostsPanel } from '@/components/JobCostsPanel';
-import { BidPriceCard, quoteOptionLabel, type QuoteOption } from '@/components/BidPriceCard';
+import { BidPriceCard, aiMidpoint, aiRangeText, quoteOptionLabel, type QuoteOption } from '@/components/BidPriceCard';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/lib/auth';
 import { PhotoZoomDialog } from '@/components/PhotoZoomDialog';
@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { RequestCrewBidsDialog } from '@/components/RequestCrewBidsDialog';
 import { RateJobDialog } from '@/components/Reviews';
-import { Bot, Inbox, Gavel, Loader2, Star, Trophy, Plus, Pencil, Image as ImageIcon, MapPin, Phone, ChevronLeft, ChevronRight, X, MessageSquare } from 'lucide-react';
+import { Bot, Inbox, Gavel, Loader2, Star, Trophy, Plus, Pencil, Image as ImageIcon, MapPin, Phone, ChevronLeft, ChevronRight, X, MessageSquare, Check } from 'lucide-react';
 import { EditBidDialog } from '@/components/EditBidDialog';
 import { EditJobInfoDialog } from '@/components/EditJobInfoDialog';
 import { ConfirmClimberDates, isPassed } from '@/components/ConfirmClimberDates';
@@ -238,6 +238,22 @@ export default function BidBoard() {
     if (!same) supabase.functions.invoke('quote-pick-alert', { body: { bid_request_id: r.id } }).catch(() => {});
     qc.invalidateQueries({ queryKey: ['bid-requests'] });
     qc.invalidateQueries({ queryKey: ['bids'] });
+  };
+
+  // The AI's middle price picked for the whole job, before or without a crew offer (bid_id stays null).
+  const pickJobAi = async (r: BidRequest, amount: number) => {
+    const cur = (r as any).quote_pick;
+    const same = !!cur && !cur.bid_id && cur.option === 'ai';
+    const pick = same ? null : {
+      bid_id: null, option: 'ai', amount, climber_pay: null,
+      picked_by_name: ((user?.user_metadata as any)?.full_name || user?.email || '').split(/[ @]/)[0] || null,
+      picked_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('bid_requests').update({ quote_pick: pick } as any).eq('id', r.id);
+    if (error) return toast.error('Could not save your pick');
+    toast.success(same ? 'Pick cleared' : `Picked the AI price — ${money(amount)}. Team alerted.`);
+    if (!same) supabase.functions.invoke('quote-pick-alert', { body: { bid_request_id: r.id } }).catch(() => {});
+    qc.invalidateQueries({ queryKey: ['bid-requests'] });
   };
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -967,6 +983,30 @@ export default function BidBoard() {
                       }}
                     />
 
+                    {(() => {
+                      // Website jobs: the full range the customer was texted (Scout jobs show theirs above).
+                      const l = !(r as any).capture_id && (r as any).lead_id ? leadEstimates?.[(r as any).lead_id] : null;
+                      const range = l ? aiRangeText(l.estimated_cost_min, l.estimated_cost_max) : null;
+                      const mid = l ? aiMidpoint(l.estimated_cost_min, l.estimated_cost_max) : null;
+                      const jobPick = (r as any).quote_pick;
+                      const picked = !!jobPick && !jobPick.bid_id && jobPick.option === 'ai';
+                      return range ? (
+                        <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">AI estimate sent to the customer</div>
+                            <div className="text-lg font-bold text-primary">{range}</div>
+                          </div>
+                          {mid != null && (
+                            <Button type="button" size="sm" variant={picked ? 'default' : 'outline'} onClick={() => pickJobAi(r, mid)}>
+                              {picked && <Check className="mr-1 h-4 w-4" />}
+                              {picked ? `Picked: AI middle price ${money(mid)}` : `Pick AI middle price ${money(mid)}`}
+                            </Button>
+                          )}
+                          {picked && <div className="text-xs text-muted-foreground">{jobPick.picked_by_name || 'The owner'} picked this to quote the customer. Tap again to clear it.</div>}
+                        </div>
+                      ) : null;
+                    })()}
+
                     {list.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No offers in yet.</div>
                     ) : (
@@ -1127,7 +1167,7 @@ export default function BidBoard() {
                                 ) : (
                                   <BidPriceCard
                                     result={priced}
-                                    pick={(r as any).quote_pick?.bid_id === b.id ? (r as any).quote_pick : null}
+                                    pick={(r as any).quote_pick && ((r as any).quote_pick.bid_id === b.id || !(r as any).quote_pick.bid_id) ? (r as any).quote_pick : null}
                                     onPick={(option, amount) => pickQuote(r, b, option, amount, priced)}
                                     equipmentNeeded={eqLabels.length ? eqLabels.join(', ') : null}
                                     groundLabel={(() => {

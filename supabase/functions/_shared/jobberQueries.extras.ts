@@ -1,7 +1,8 @@
 // Large-company setup: the documents for the Jobber parts that need permissions TreeCheck's Jobber app gets after
-// Jobber's review (productionJobberExtras.ts): Users, Requests, Products & Services and Custom Fields. Switched off
-// until production_rollout.jobber_extras is true. Pure: strings only, no Deno globals. Checked against Jobber API
-// version 2026-09-25 by tools/jobber-schema/validate-queries.mjs in the engagement folder. Maintained outside Lovable.
+// Jobber's review (productionJobberExtras.ts): Users, Requests, Products & Services, Custom Fields, Time Sheets and
+// Expenses. Switched off until production_rollout.jobber_extras is true. Pure: strings only, no Deno globals. Checked
+// against Jobber API version 2026-09-25 by tools/jobber-schema/validate-queries.mjs in the engagement folder.
+// Maintained outside Lovable.
 
 /** One small read per permission: each answers, or fails when the company's connection lacks that permission. */
 export const TC_ExtrasProbeUsers = `
@@ -12,6 +13,10 @@ export const TC_ExtrasProbeProducts = `
   query TC_ExtrasProbeProducts { products(first: 1) { nodes { id } } }`;
 export const TC_ExtrasProbeFields = `
   query TC_ExtrasProbeFields { customFieldConfigurations(first: 1, filter: { appliesTo: ALL_QUOTES }) { nodes { __typename } } }`;
+export const TC_ExtrasProbeTimeSheets = `
+  query TC_ExtrasProbeTimeSheets { timeSheetEntries(first: 1) { nodes { id } } }`;
+export const TC_ExtrasProbeExpenses = `
+  query TC_ExtrasProbeExpenses { expenses(first: 1) { nodes { id } } }`;
 
 /** The company's products and services, a page at a time. */
 export const TC_ExtrasProducts = `
@@ -80,5 +85,15 @@ export const TC_ExtrasFieldUnarchive = `
     customFieldConfigurationUnarchive(customFieldConfigurationIds: $ids) {
       customFieldConfigurations { __typename }
       userErrors { message path }
+    }
+  }`;
+
+/** A job's time entries and expenses, for its crew jobs' actual hours. totalCount says whether there were more. */
+export const TC_ExtrasJobTime = `
+  query TC_ExtrasJobTime($id: EncodedId!) {
+    job(id: $id) {
+      id jobNumber
+      timeSheetEntries(first: 100) { totalCount nodes { id finalDuration ticking user { id } } }
+      expenses(first: 50) { totalCount nodes { id total } }
     }
   }`;

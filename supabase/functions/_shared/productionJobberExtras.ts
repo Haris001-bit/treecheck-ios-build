@@ -1,20 +1,22 @@
 // Large-company setup: the Jobber parts that wait on Jobber's review of TreeCheck's app (Users, Requests, Products &
-// Services, Custom Fields). Switched off: nothing here runs until production_rollout.jobber_extras is true, and each
-// company reconnects Jobber once after the permissions are added to the app. Setup checks which permissions the
-// connection has, matches the rate card's services and the team to Jobber's, and adds the five quote fields; Crew work
-// lists open Jobber requests to start estimates from; quoteExtrasFor is what a send adds to the quote. The choices are
-// kept in production_settings.jobber (server-only). Writes to Jobber only to add the five quote fields.
-// Server-side only. Maintained outside Lovable.
+// Services, Custom Fields, Time Sheets, Expenses). Switched off: nothing here runs until production_rollout.jobber_extras
+// is true, and each company reconnects Jobber once after the permissions are added to the app. Setup checks which
+// permissions the connection has, matches the rate card's services and the team to Jobber's, and adds the five quote
+// fields; Crew work lists open Jobber requests to start estimates from; quoteExtrasFor is what a send adds to the quote;
+// jobberActuals reads a job's time sheets and expenses as its crew jobs' actual hours, a suggestion until someone saves
+// it. The choices are kept in production_settings.jobber (server-only). Writes to Jobber only to add the five quote
+// fields. Server-side only. Maintained outside Lovable.
 import { JobberCallError, jobberMutate, jobberRead, shortJobberError, tokenFor } from "./jobberApi.ts";
 import { killSwitchOn } from "./jobberSwitches.ts";
 import {
-  TC_ExtrasFieldCreateLink, TC_ExtrasFieldCreateText, TC_ExtrasFieldUnarchive, TC_ExtrasProbeFields, TC_ExtrasProbeProducts,
-  TC_ExtrasProbeRequests, TC_ExtrasProbeUsers, TC_ExtrasProducts, TC_ExtrasQuoteFields, TC_ExtrasRequest, TC_ExtrasRequests, TC_ExtrasUsers,
+  TC_ExtrasFieldCreateLink, TC_ExtrasFieldCreateText, TC_ExtrasFieldUnarchive, TC_ExtrasJobTime, TC_ExtrasProbeExpenses, TC_ExtrasProbeFields,
+  TC_ExtrasProbeProducts, TC_ExtrasProbeRequests, TC_ExtrasProbeTimeSheets, TC_ExtrasProbeUsers, TC_ExtrasProducts, TC_ExtrasQuoteFields,
+  TC_ExtrasRequest, TC_ExtrasRequests, TC_ExtrasUsers,
 } from "./jobberQueries.extras.ts";
 import {
-  matchServices, matchTeam, openRequests, QUOTE_FIELDS, quoteFieldValues,
-  type JobberProduct, type JobberRequestNode, type JobberUser, type OpenRequest, type QuoteExtras, type QuoteFieldKey, type ServicesPreview,
-  type TeamMember, type TeamPreview,
+  actualsFromJobber, jobShares, matchServices, matchTeam, openRequests, QUOTE_FIELDS, quoteFieldValues,
+  type ActualsFromJobber, type JobberExpense, type JobberProduct, type JobberRequestNode, type JobberTimeEntry, type JobberUser, type OpenRequest,
+  type QuoteExtras, type QuoteFieldKey, type ServicesPreview, type TeamMember, type TeamPreview,
 } from "./production/jobberExtras.ts";
 import type { RateCardDefinition } from "./production/rules.ts";
 import type { PricedItem } from "./production/estimate.ts";
@@ -27,7 +29,10 @@ export interface ExtrasDeps { token?: (admin: Admin, ownerId: string) => Promise
 
 /** true: the connection has it; false: Jobber refused; null: Jobber couldn't be asked just now. */
 export type Permission = boolean | null;
-export interface ExtrasProbe { connected: boolean; users: Permission; requests: Permission; products: Permission; customFields: Permission; checkedAt: string }
+export interface ExtrasProbe {
+  connected: boolean; users: Permission; requests: Permission; products: Permission; customFields: Permission;
+  timeSheets: Permission; expenses: Permission; checkedAt: string;
+}
 export interface ExtrasSettings {
   productIds?: Record<string, string>;
   userIds?: Record<string, string>;
@@ -82,7 +87,7 @@ async function permitted(token: string, doc: string): Promise<Permission> {
   }
 }
 
-/** Which of the four permissions the company's Jobber connection has. Saved, so setup can say "Reconnect Jobber". */
+/** Which of the six permissions the company's Jobber connection has. Saved, so setup can say "Reconnect Jobber". */
 export async function probeExtras(admin: Admin, ownerId: string, deps: ExtrasDeps = {}, now = Date.now()): Promise<ExtrasProbe> {
   const checkedAt = new Date(now).toISOString();
   const token = await (deps.token ?? tokenFor)(admin, ownerId);
@@ -93,8 +98,10 @@ export async function probeExtras(admin: Admin, ownerId: string, deps: ExtrasDep
       requests: await permitted(token, TC_ExtrasProbeRequests),
       products: await permitted(token, TC_ExtrasProbeProducts),
       customFields: await permitted(token, TC_ExtrasProbeFields),
+      timeSheets: await permitted(token, TC_ExtrasProbeTimeSheets),
+      expenses: await permitted(token, TC_ExtrasProbeExpenses),
     }
-    : { connected: false, users: null, requests: null, products: null, customFields: null, checkedAt };
+    : { connected: false, users: null, requests: null, products: null, customFields: null, timeSheets: null, expenses: null, checkedAt };
   await saveExtras(admin, ownerId, { probe });
   return probe;
 }
@@ -286,5 +293,71 @@ export async function quoteExtrasFor(admin: Admin, token: string, ownerId: strin
   } catch (e) {
     console.warn("[productionJobberExtras] extras skipped", String((e as Error)?.message ?? e).slice(0, 200));
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Actual hours from Jobber's time sheets
+
+/**
+ * A Jobber job's time entries and expenses as the actual hours of the crew jobs linked to it, split by their estimated
+ * man-hours when there are several. Read only; nothing is saved here.
+ */
+export async function jobberActuals(admin: Admin, ownerId: string, jobId: string, deps: ExtrasDeps = {}, now = Date.now()): Promise<ExtrasResult<{ byPacket: Record<string, ActualsFromJobber> }>> {
+  const token = await (deps.token ?? tokenFor)(admin, ownerId);
+  if (!token) return { ok: false, error: NOT_CONNECTED };
+  const { data: rows } = await admin.from("production_packets").select("id, est_man_hours").eq("contractor_id", ownerId).eq("jobber_job_id", jobId);
+  const packets = ((rows ?? []) as { id: string; est_man_hours: number | string | null }[]).map((p) => ({ id: p.id, estManHours: Number(p.est_man_hours) || 0 }));
+  if (!packets.length) return { ok: true, byPacket: {} };
+  try {
+    type Conn<T> = { totalCount?: number | null; nodes?: T[] | null } | null;
+    type Reply = { job?: { id: string; jobNumber?: number | string | null; timeSheetEntries?: Conn<JobberTimeEntry>; expenses?: Conn<JobberExpense> } | null };
+    const { data } = await jobberRead<Reply>(token, TC_ExtrasJobTime, { id: jobId }, { retries: 1, retryOn: "throttle" });
+    const job = data.job;
+    if (!job) return { ok: false, error: "That job is no longer in Jobber." };
+    const entries = (job.timeSheetEntries?.nodes ?? []).filter((e) => !!e?.id);
+    const expenses = (job.expenses?.nodes ?? []).filter((x) => !!x?.id);
+    const partial = (job.timeSheetEntries?.totalCount ?? 0) > entries.length || (job.expenses?.totalCount ?? 0) > expenses.length;
+    const shares = jobShares(packets);
+    const readAt = new Date(now).toISOString();
+    const jobNumber = job.jobNumber == null ? null : String(job.jobNumber);
+    const byPacket: Record<string, ActualsFromJobber> = {};
+    for (const p of packets) {
+      const a = actualsFromJobber(entries, expenses, { share: shares[p.id], partial, jobNumber, readAt });
+      if (a) byPacket[p.id] = a;
+    }
+    return { ok: true, byPacket };
+  } catch (e) {
+    return { ok: false, error: `Jobber's time sheets couldn't be read: ${shortJobberError(e)}` };
+  }
+}
+
+/**
+ * When Jobber closes a job: its time sheets become the suggested actual hours of each linked crew job that has none
+ * saved yet (production_packets.actuals.fromJobber). Hours someone saved are never touched. Only with the extras on;
+ * never throws. Returns how many crew jobs got a suggestion.
+ */
+export async function fillActualsFromJobber(admin: Admin, ownerId: string, jobId: string, deps: ExtrasDeps = {}, now = Date.now()): Promise<number> {
+  try {
+    if (!(await extrasSwitchOn(admin))) return 0;
+    const r = await jobberActuals(admin, ownerId, jobId, deps, now);
+    if (r.ok === false) {
+      console.warn("[productionJobberExtras] time sheets not read", r.error);
+      return 0;
+    }
+    const ids = Object.keys(r.byPacket);
+    if (!ids.length) return 0;
+    const { data: rows } = await admin.from("production_packets").select("id, actuals, updated_at").in("id", ids);
+    let filled = 0;
+    for (const row of (rows ?? []) as { id: string; actuals: Record<string, unknown> | null; updated_at: string }[]) {
+      if (typeof row.actuals?.manHours === "number") continue;
+      const { data } = await admin.from("production_packets").update({ actuals: { fromJobber: r.byPacket[row.id] } })
+        .eq("id", row.id).eq("updated_at", row.updated_at).select("id");
+      if (data?.length) filled++;
+    }
+    return filled;
+  } catch (e) {
+    console.warn("[productionJobberExtras] time sheets skipped", String((e as Error)?.message ?? e).slice(0, 200));
+    return 0;
   }
 }

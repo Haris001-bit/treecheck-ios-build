@@ -50,38 +50,58 @@ export default function ProductionSetup() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [unreadable, setUnreadable] = useState(false);
   const loadedDraft = useRef<string | null>(null);
   const defRef = useRef<RateCardDefinition | null>(null);
   const labelRef = useRef('');
+  const settingsRef = useRef<SettingsRow | null>(null);
+  const dirtyRef = useRef(false);
+  const settingsDirtyRef = useRef(false);
+  // Bumped on every edit, so a save only marks the page saved when nothing changed while it ran.
+  const edits = useRef(0);
+  const settingsEdits = useRef(0);
   defRef.current = def;
   labelRef.current = label;
+  settingsRef.current = settings;
+  dirtyRef.current = dirty;
+  settingsDirtyRef.current = settingsDirty;
 
+  // Load only from a read made after the page opened. Opening it again (another Settings tab and back) used to
+  // show the cached copy from the first visit, and the next edit then saved that over newer work.
+  const fresh = setup.isFetchedAfterMount;
   useEffect(() => {
-    if (!draft || loadedDraft.current === draft.id) return;
+    if (!draft || !fresh || loadedDraft.current === draft.id) return;
     const p = parseDefinition(draft.definition);
     setDef(p.kind === 'ok' ? p.def : null);
+    setUnreadable(p.kind !== 'ok');
     setLabelState(draft.label ?? '');
     loadedDraft.current = draft.id;
     setDirty(false);
-  }, [draft]);
+  }, [draft, fresh]);
   useEffect(() => {
-    if (setup.data?.settings && !settings) setSettings({ ...setup.data.settings, basics: { ...DEFAULT_BASICS, ...setup.data.settings.basics } });
-  }, [setup.data?.settings, settings]);
+    if (fresh && setup.data?.settings && !settings) setSettings({ ...setup.data.settings, basics: { ...DEFAULT_BASICS, ...setup.data.settings.basics } });
+  }, [fresh, setup.data?.settings, settings]);
 
   const update = useCallback((fn: (d: RateCardDefinition) => void) => {
     setDef((prev) => { if (!prev) return prev; const next = structuredClone(prev); fn(next); return next; });
+    edits.current += 1;
     setDirty(true);
   }, []);
-  const setLabel = (v: string) => { setLabelState(v); setDirty(true); };
+  const setLabel = (v: string) => { setLabelState(v); edits.current += 1; setDirty(true); };
   const updateSettings = useCallback((patch: Partial<SettingsRow>) => {
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
+    settingsEdits.current += 1;
     setSettingsDirty(true);
   }, []);
 
   const saveNow = useCallback(async () => {
     if (!draft || !defRef.current) return;
+    const seen = edits.current;
     setSaving(true);
-    try { await setup.saveDefinition(draft.id, defRef.current, labelRef.current); setDirty(false); }
+    try {
+      await setup.saveDefinition(draft.id, defRef.current, labelRef.current);
+      if (edits.current === seen) setDirty(false);
+    }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save'); }
     finally { setSaving(false); }
   }, [draft, setup]);
@@ -90,19 +110,30 @@ export default function ProductionSetup() {
     const t = setTimeout(saveNow, 800);
     return () => clearTimeout(t);
   }, [def, label, dirty, saveNow]);
+  const saveSettingsNow = useCallback(async () => {
+    const s = settingsRef.current;
+    if (!s) return;
+    const seen = settingsEdits.current;
+    try {
+      const { basics, crew_counts, resources, cost_viewer_ids, send_unit_cost, isa_credentials } = s;
+      await setup.saveSettings(status.is_owner
+        ? { basics, crew_counts, resources, cost_viewer_ids, send_unit_cost, isa_credentials }
+        : { basics, crew_counts, resources, isa_credentials });
+      if (settingsEdits.current === seen) setSettingsDirty(false);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save'); }
+  }, [setup, status.is_owner]);
   useEffect(() => {
     if (!settingsDirty || !settings) return;
-    const t = setTimeout(async () => {
-      try {
-        const { basics, crew_counts, resources, cost_viewer_ids, send_unit_cost, isa_credentials } = settings;
-        await setup.saveSettings(status.is_owner
-          ? { basics, crew_counts, resources, cost_viewer_ids, send_unit_cost, isa_credentials }
-          : { basics, crew_counts, resources, isa_credentials });
-        setSettingsDirty(false);
-      } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save'); }
-    }, 800);
+    const t = setTimeout(saveSettingsNow, 800);
     return () => clearTimeout(t);
-  }, [settings, settingsDirty, setup, status.is_owner]);
+  }, [settings, settingsDirty, saveSettingsNow]);
+  // Leaving the page within the 800 ms wait still saves the last edit.
+  const flush = useRef(() => {});
+  flush.current = () => {
+    if (dirtyRef.current) void saveNow();
+    if (settingsDirtyRef.current) void saveSettingsNow();
+  };
+  useEffect(() => () => flush.current(), []);
 
   const goTo = useCallback((s: StepKey, serviceKey?: string) => { setStep(s); setFocusService(serviceKey ?? null); window.scrollTo({ top: 0 }); }, []);
   const badges = useMemo(() => {
@@ -153,6 +184,7 @@ export default function ProductionSetup() {
     );
   }
   if (!def || !settings) {
+    if (!unreadable) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
     return <div className="p-6 text-sm text-destructive">This draft couldn't be read. Refresh the page; if it keeps happening, tell TreeCheck support.</div>;
   }
 

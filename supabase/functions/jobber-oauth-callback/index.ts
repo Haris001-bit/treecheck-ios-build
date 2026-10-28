@@ -4,6 +4,7 @@
 // started from Jobber's App Marketplace has no state and is handed to TreeCheck's Jobber page instead.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { JOBBER_TOKEN_URL, jobberGraphql, PULSE_JOBBER_VERSION } from "../_shared/jobber.ts";
+import { keepHolderConnected } from "./keepHolder.ts";
 
 const REDIRECT_URI = "https://wsbtxxobbvcdxiovnssi.functions.supabase.co/jobber-oauth-callback";
 // Only when the connection did not say where to go back to (TreeCheck's web address since 2026-10-02).
@@ -107,6 +108,8 @@ Deno.serve(async (req) => {
         .eq("jobber_account_id", accountId).is("disconnected_at", null)
         .neq("contractor_id", ownerId).limit(1);
       if (taken && taken.length > 0) {
+        // The code is already traded, and Jobber's new sign-in cancelled that company's: it keeps the new one.
+        await keepHolderConnected(admin, accountId, ownerId, tok, accountName);
         return back({
           jobber_error: "This Jobber account is already connected to another TreeCheck company. " +
             "Each Jobber account can be connected to one TreeCheck company.",
@@ -130,6 +133,8 @@ Deno.serve(async (req) => {
     const { error: saveErr } = await admin.from("jobber_tokens").upsert(row, { onConflict: "contractor_id" });
     if (saveErr) {
       if (saveErr.code === "23505") {
+        // Another company took this account a moment ago: the same applies.
+        if (accountId) await keepHolderConnected(admin, accountId, ownerId, tok, accountName);
         return back({
           jobber_error: "This Jobber account is already connected to another TreeCheck company. " +
             "Each Jobber account can be connected to one TreeCheck company.",

@@ -70,22 +70,23 @@ Deno.serve(async (req) => {
     const action: "set_quantity" = body.action ?? "set_quantity";
     const desiredQty: number = Math.max(0, parseInt(body.quantity ?? "0", 10));
 
-    // Founder bypass — no Stripe needed
+    // Founder and demo (sandbox) bypass — no Stripe needed; a demo company is never charged.
     const { data: profile } = await supabase
       .from("profiles")
-      .select("is_founder, subscription_tier, trial_ends_at, stripe_subscription_id, stripe_customer_id")
+      .select("is_founder, is_sandbox, subscription_tier, trial_ends_at, stripe_subscription_id, stripe_customer_id")
       .eq("id", user.id)
       .single();
     const isFounder = !!profile?.is_founder;
+    const isSandbox = profile?.is_sandbox === true;
 
     const { data: existing } = await supabase
       .from("team_seats").select("*").eq("contractor_id", user.id).maybeSingle();
 
-    if (isFounder) {
+    if (isFounder || isSandbox) {
       await supabase.from("team_seats").upsert({
         contractor_id: user.id,
         seat_quantity: desiredQty,
-        status: "founder_comp",
+        status: isSandbox && !isFounder ? "demo_comp" : "founder_comp",
         stripe_subscription_id: null,
       }, { onConflict: "contractor_id" });
       return new Response(JSON.stringify({ success: true, seat_quantity: desiredQty, founder: true }),

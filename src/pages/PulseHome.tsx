@@ -15,6 +15,8 @@ import NativeLinkNotice from "@/components/pulse/NativeLinkNotice";
 import { PulseScreen } from "@/components/pulse/screen/PulseScreen";
 import { stillArriving } from "@/components/pulse/screen/pulseScreenTypes";
 import { usePulseAccess } from "@/hooks/pulse/usePulseAccess";
+import { useProfile } from "@/hooks/useProfile";
+import { PulseDemoSample } from "@/components/pulse/PulseDemoSample";
 import { pulseGet } from "@/lib/pulse/api";
 import { pulseSetupAllowed } from "@/lib/pulse/flags";
 import { createPulseDataSource } from "@/lib/pulse/pulseDataSource";
@@ -138,6 +140,10 @@ function PulseHomeInner() {
 }
 
 export default function PulseHome() {
+  const { data: profile, isLoading } = useProfile();
+  if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  // Demo logins never open real Pulse; they see labeled sample numbers.
+  if (profile?.is_sandbox) return <PulseDemoSample />;
   return (
     <PulseGate>
       <PulseHomeInner />

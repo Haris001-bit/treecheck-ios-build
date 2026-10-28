@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  AGENT_SCHEMA,
   agentJob,
   agentSystemPrompt,
   averageGap,
@@ -18,6 +19,8 @@ import {
   guidanceOf,
   hasContactDetails,
   hasPersonalDetails,
+  isLargeMiss,
+  missesOf,
   projectedPrice,
   learnService,
   localParts,
@@ -377,5 +380,66 @@ describe("renderBlock", () => {
   it("guidanceOf reads a saved guidance back and ignores junk", () => {
     expect(guidanceOf({ factors: [...g.factors, { service: "X", size: "any", factor: 1 }], rules: ["a", 5] })).toEqual({ factors: g.factors, rules: ["a"] });
     expect(guidanceOf(null)).toBeNull();
+  });
+});
+
+describe("large misses: why each one happened, kept apart from the guidance (Mark, 2026-10-27)", () => {
+  const job = (n: number, ai: number, amount = 1000) => comparisonOf(scoutJob(n, { ai, amount }))!;
+  // Gaps: +60.7% (2296 on 1429), -38%, +10%.
+  const jobs = [{ label: "J1", c: job(1, 2296, 1429) }, { label: "J2", c: job(2, 620) }, { label: "J3", c: job(3, 1100) }];
+  const entry = (over: Record<string, unknown> = {}) => ({
+    job: "J1", direction: "high", gap_pct: 60.7, cause_type: "crew_requirements", confidence: "medium",
+    likely_reason: "Scout priced a harder removal with several loads, but the crew needed about an hour.", ...over,
+  });
+
+  it("the agent is told to explain every 15 percent miss, and that one miss alone never changes the guidance", () => {
+    const p = agentSystemPrompt("scout");
+    expect(p).toContain("- Explain large misses. For every job where the estimator was 15 percent or more above or below the picked price (marked large_miss)");
+    expect(p).toContain("say that the cause is unclear rather than guessing.");
+    expect(p).toContain("Only a repeatable pattern changes factors or reading rules.");
+    expect(p).toContain("  - cause_type: tree_reading, disposal, access, crew_requirements, size, pricing_level, owner_edit, insufficient_information or other.");
+    expect(p).not.toMatch(/[–—]/);
+  });
+
+  it("the answer schema requires large_misses, strict", () => {
+    expect(AGENT_SCHEMA.required).toContain("large_misses");
+    const items = AGENT_SCHEMA.properties.large_misses.items;
+    expect(items.additionalProperties).toBe(false);
+    expect([...items.required].sort()).toEqual(Object.keys(items.properties).sort());
+  });
+
+  it("15 percent either way, as the card rounds it; only new jobs are marked for the agent; the report keeps the flag", () => {
+    expect([14.4, 14.5, -15, 61.4, 0, NaN].map(isLargeMiss)).toEqual([false, true, true, true, false, false]);
+    expect(agentJob(jobs[1].c, "J2", true)).toMatchObject({ gap_pct: -38, large_miss: true });
+    expect(agentJob(jobs[1].c, "E1", false)).not.toHaveProperty("large_miss");
+    expect(reportJob(jobs[2].c)).toMatchObject({ large_miss: false });
+    expect(reportJob(jobs[2].c)).not.toHaveProperty("miss");
+  });
+
+  it("keeps an explanation that fits its job, and drops the rest", () => {
+    const got = missesOf({
+      large_misses: [
+        entry({ likely_reason: "Scout read it as a hard removal — the crew needed only an hour." }),
+        entry(), // the same job again: the first one counts
+        entry({ job: "J3", gap_pct: 10 }), // under 15 percent
+        entry({ job: "J2", direction: "high", gap_pct: -38 }), // Scout was low on J2
+        entry({ job: "J2", direction: "low", gap_pct: 20 }), // some other job's gap
+        entry({ job: "J9" }),
+      ],
+    }, jobs);
+    expect([...got.keys()]).toEqual([CAP(1)]);
+    expect(got.get(CAP(1))).toEqual({
+      reason: "Scout read it as a hard removal, the crew needed only an hour.", cause: "crew_requirements", confidence: "medium",
+    });
+    const low = (over: Record<string, unknown>) => missesOf({ large_misses: [entry({ job: "J2", direction: "low", gap_pct: -38, ...over })] }, jobs);
+    expect(low({}).get(CAP(2))?.cause).toBe("crew_requirements");
+    expect(low({ gap_pct: 38 }).size).toBe(1); // the gap may come without its sign
+    for (const bad of [
+      { likely_reason: "Unclear." }, { likely_reason: "Call 405-555-0100 to ask what the crew found there." },
+      { likely_reason: "See https://example.com for the crew's notes on this job." }, { likely_reason: "Like J1, Scout counted too many disposal loads here." },
+      { cause_type: "weather" }, { confidence: "certain" },
+    ]) expect(low(bad).size).toBe(0);
+    expect(missesOf({ decision: "keep" }, jobs).size).toBe(0);
+    expect(missesOf(null, jobs).size).toBe(0);
   });
 });

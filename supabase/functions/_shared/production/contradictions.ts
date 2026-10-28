@@ -70,15 +70,16 @@ export function findContradictions(def: RateCardDefinition): Contradiction[] {
   };
 
   for (const s of def.services) {
+    // A switched-off service is never priced (isOffered refuses it), so nothing about it can be open. A company
+    // that doesn't sell memberships must not be asked to price one before it can publish.
+    if (s.offered === false) continue;
     const st = s.strategy;
     const qs = new Set(s.questions.map((q) => q.key));
     for (const k of strategyQuestions(s)) {
       if (!qs.has(k)) push({ key: `question:${s.key}:${k}`, kind: 'missing_question', serviceKey: s.key, blocking: true, message: `${s.name}: the price uses "${k}", but there's no such question.` });
     }
-    if (s.offered !== false) {
-      const u = unpriced(def, s);
-      if (u) push({ key: `unpriced:${s.key}`, kind: 'unpriced', serviceKey: s.key, blocking: true, message: `${s.name}: ${u}.` });
-    }
+    const u = unpriced(def, s);
+    if (u) push({ key: `unpriced:${s.key}`, kind: 'unpriced', serviceKey: s.key, blocking: true, message: `${s.name}: ${u}.` });
     if (s.minimum !== undefined && s.maximum !== undefined && s.minimum > s.maximum) {
       push({ key: `min_max:${s.key}`, kind: 'min_max', serviceKey: s.key, blocking: true, message: `${s.name}: the minimum ${dollars(s.minimum)} is above the maximum ${dollars(s.maximum)}.` });
     }

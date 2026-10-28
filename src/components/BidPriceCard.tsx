@@ -21,6 +21,15 @@ export function aiMidpoint(aiMin?: number | null, aiMax?: number | null): number
   return mid != null && mid > 0 ? mid : null;
 }
 
+/** The AI's full range as text, e.g. "$2,542–$3,438", or null when there is none. */
+export function aiRangeText(aiMin?: number | null, aiMax?: number | null): string | null {
+  const lo = aiMin != null && Number(aiMin) > 0 ? Number(aiMin) : null;
+  const hi = aiMax != null && Number(aiMax) > 0 ? Number(aiMax) : null;
+  if (lo != null && hi != null && lo !== hi) return `${money(Math.min(lo, hi))}–${money(Math.max(lo, hi))}`;
+  const one = hi ?? lo;
+  return one != null ? money(one) : null;
+}
+
 /** Owner-facing price panel for one crew offer. Never shown to crew. */
 export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabel, ownerLabel, aiMin, aiMax, aiLabel, crewShare }: {
   result: PricingResult;
@@ -42,6 +51,8 @@ export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabe
   crewShare?: number;
 }) {
   const aiMid = aiMidpoint(aiMin, aiMax);
+  const aiRange = aiRangeText(aiMin, aiMax);
+  const aiSub = aiRange && aiMid != null && aiRange !== money(aiMid) ? `Range ${aiRange} · quotes the middle` : undefined;
   const labelOf = (o: QuoteOption) => (o === 'ai' && aiLabel ? aiLabel : OPTION_LABEL[o]);
   const banner = pick && (
     <div className="rounded-md bg-primary/10 border border-primary/40 p-2 text-sm">
@@ -60,7 +71,7 @@ export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabe
         </div>
         {aiMid != null && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Box label={labelOf('ai')} value={money(aiMid)} selected={pick?.option === 'ai'}
+            <Box label={labelOf('ai')} value={money(aiMid)} sub={aiSub} selected={pick?.option === 'ai'}
               onClick={onPick ? () => onPick('ai', aiMid) : undefined} />
           </div>
         )}
@@ -84,7 +95,7 @@ export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabe
       {onPick && !pick && <div className="text-xs text-muted-foreground">Tap a price to pick the quote to send.</div>}
       <div className={`grid grid-cols-2 gap-2 ${opts.length > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
         {opts.map(([o, v]) => (
-          <Box key={o} label={labelOf(o)} value={money(v)} accent={o === 'recommended'}
+          <Box key={o} label={labelOf(o)} value={money(v)} sub={o === 'ai' ? aiSub : undefined} accent={o === 'recommended'}
             selected={pick?.option === o}
             onClick={onPick && v != null ? () => onPick(o, v) : undefined} />
         ))}
@@ -95,6 +106,7 @@ export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabe
         <div className="rounded-md border bg-muted/40 p-2 text-xs space-y-1">
           <div className="font-semibold text-foreground">Formula vs {aiLabel ? 'AI estimate' : 'Scout AI'}</div>
           <Line label="Your formula (Recommended)" value={money(result.baseSale)} />
+          {aiRange && <Line label={`${aiLabel ?? 'Scout AI'} range`} value={aiRange} />}
           <Line label={`${aiLabel ?? 'Scout AI'} midpoint${diff != null ? ` (${diff >= 0 ? '+' : ''}${diff.toFixed(0)}%)` : ''}`} value={money(aiMid)} strong />
           <Line label="Climber gets (his ask, never more)" value={money(b.crew)} />
           <Line label="Fair climber pay (AI guide, owner only)" value={`~${money(fairPay)}`} />
@@ -156,12 +168,13 @@ export function BidPriceCard({ result, pick, onPick, equipmentNeeded, groundLabe
   );
 }
 
-const Box = ({ label, value, accent, selected, onClick }: { label: string; value: string; accent?: boolean; selected?: boolean; onClick?: () => void }) => (
+const Box = ({ label, value, sub, accent, selected, onClick }: { label: string; value: string; sub?: string; accent?: boolean; selected?: boolean; onClick?: () => void }) => (
   <button type="button" disabled={!onClick} onClick={onClick}
     className={`relative text-left rounded-md border p-2 transition ${accent ? 'border-primary/30 bg-primary/5' : ''} ${selected ? 'ring-2 ring-primary border-primary bg-primary/10' : ''} ${onClick ? 'hover:border-primary cursor-pointer' : 'cursor-default'}`}>
     {selected && <Check className="absolute top-1.5 right-1.5 w-4 h-4 text-primary" />}
     <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
     <div className={`font-bold ${accent || selected ? 'text-primary' : ''}`}>{value}</div>
+    {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
   </button>
 );
 

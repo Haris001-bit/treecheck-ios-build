@@ -11,13 +11,16 @@ import type { ServicesPreview, TeamPreview } from '@/lib/production/jobberExtras
 import { Section } from './fields';
 
 type Permission = boolean | null;
-interface Probe { connected: boolean; users: Permission; requests: Permission; products: Permission; customFields: Permission }
+interface Probe { connected: boolean; users: Permission; requests: Permission; products: Permission; customFields: Permission; timeSheets?: Permission; expenses?: Permission }
 interface Info { probe: Probe; counts: { services: number; team: number; fields: number } }
 
 const NONE = '__none';
 const PERMISSIONS: [keyof Omit<Probe, 'connected'>, string][] = [
   ['products', 'Products and services'], ['users', 'Users'], ['requests', 'Requests'], ['customFields', 'Custom fields'],
+  ['timeSheets', 'Time sheets'], ['expenses', 'Expenses'],
 ];
+/** Matching, requests and the quote fields need these four; time sheets and expenses only fill in actual hours. */
+const CORE: (keyof Omit<Probe, 'connected'>)[] = ['products', 'users', 'requests', 'customFields'];
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 const call = <T,>(body: Record<string, unknown>) => productionCall<T>('production-setup', body);
 
@@ -53,7 +56,7 @@ function ExtrasCard() {
 
   const probe = info?.probe;
   const missing = !!probe && (!probe.connected || PERMISSIONS.some(([k]) => probe[k] === false));
-  const ready = !!probe && !missing;
+  const ready = !!probe && probe.connected && CORE.every((k) => probe[k] !== false);
   // Every Jobber item or user once (duplicates in Jobber are left out), as [id, name].
   const jobberItems = services ? [...new Map<string, string>([
     ...services.matches.flatMap((m) => (m.productId ? [[m.productId, m.productName ?? '']] as [string, string][] : [])),
@@ -65,7 +68,7 @@ function ExtrasCard() {
   ])] : [];
 
   return (
-    <Section title="Jobber" hint="Matches your services and team to Jobber, starts estimates from Jobber requests, and adds TreeCheck's details to each quote."
+    <Section title="Jobber" hint="Matches your services and team to Jobber, starts estimates from Jobber requests, adds TreeCheck's details to each quote, and fills in actual hours from Jobber's time sheets."
       action={<Button size="sm" variant="outline" disabled={!!busy} onClick={() => load(true)}>{busy === 'probe' && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}Check again</Button>}>
       {!probe ? <p className="text-sm text-muted-foreground">Checking Jobber…</p> : (
         <div className="flex flex-wrap gap-1">

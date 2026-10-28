@@ -120,3 +120,10 @@ Plan approved. Tasks:
 - [ ] Official Rules placeholders: waiting on Mark/lawyer for sponsor name and address, eligibility, age, eligible states, start date, retail value and the other legal terms (and whether a free entry method is needed)
 - [x] Apply Mark's trial-page brief: new intro line, giveaway section (auto-entry on trial start, no free entry, renewal disclosure), placeholder Official Rules, billed-annually wording
 - [x] Replace the trial-page giveaway banner image with the new chainsaw photo
+
+- [x] Demo (sandbox) accounts can invite real office teammates (free seats)
+- [x] Resend pending teammate invites with app.treecheck.ai links
+- [x] Jobs shows the full AI estimate range (e.g. $2,542–$3,438), not a single price
+- [x] Email Jobs/Scout/Marketing/Subs summary to Brad, Angie, Mark
+- [x] Brad's password reset email never arrived; find out why and get him a reset link
+- [x] Pulse missing from menu (check why)

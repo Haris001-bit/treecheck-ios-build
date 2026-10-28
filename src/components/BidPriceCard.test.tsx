@@ -60,3 +60,16 @@ describe("aiMidpoint", () => {
       .toEqual([1200, 900, 800, null, null]);
   });
 });
+
+describe('aiRangeText', () => {
+  it('shows the full AI range the customer was texted', async () => {
+    const { aiRangeText } = await import('./BidPriceCard');
+    expect(aiRangeText(2542, 3438)).toBe('$2,542–$3,438');
+  });
+});
+
+describe('AI middle price on a website job', () => {
+  it('is the middle of the range the customer was texted', () => {
+    expect(aiMidpoint(2542, 3438)).toBe(2990);
+  });
+});

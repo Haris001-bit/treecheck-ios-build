@@ -4,12 +4,13 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Home, { HOME_SEEN_KEY } from './Home';
 
-const state = vi.hoisted(() => ({ loading: false, isCrewOnly: false, isTeamMember: false, queries: vi.fn(), pulse: vi.fn() }));
+const state = vi.hoisted(() => ({ loading: false, isCrewOnly: false, isTeamMember: false, sandbox: false, queries: vi.fn(), pulse: vi.fn() }));
 vi.mock('@/hooks/useCrew', () => ({ useIsCrewOnly: () => state }));
 vi.mock('@/lib/auth', () => ({ useAuth: () => ({ user: { id: 'office-test' }, isTeamMember: state.isTeamMember }) }));
 vi.mock('@tanstack/react-query', () => ({ useQuery: () => { state.queries(); return { isLoading: true }; } }));
 vi.mock('@/components/pulse/home/PulseHomeCard', () => ({ PulseHomeCard: () => { state.pulse(); return <p>Pulse test</p>; } }));
 vi.mock('@/components/home/HomeAdvertisementSample', () => ({ HomeAdvertisementSample: () => <p>Sample test</p> }));
+vi.mock('@/hooks/useProfile', () => ({ useProfile: () => ({ data: { is_sandbox: state.sandbox }, isLoading: false }) }));
 vi.mock('@/hooks/useFreePlan', () => ({ useFreePlan: () => ({ data: undefined, isLoading: true }) }));
 
 let host: HTMLDivElement;
@@ -22,7 +23,7 @@ function show(path = '/dashboard/home') {
     <Route path="/dashboard/crew-bids" element={<p>Subcontractor jobs</p>} />
   </Routes></MemoryRouter>));
 }
-afterEach(() => { act(() => root.unmount()); host.remove(); sessionStorage.clear(); state.loading = false; state.isCrewOnly = false; state.isTeamMember = false; vi.clearAllMocks(); });
+afterEach(() => { act(() => root.unmount()); host.remove(); sessionStorage.clear(); state.loading = false; state.isCrewOnly = false; state.isTeamMember = false; state.sandbox = false; vi.clearAllMocks(); });
 describe('Home audience protection', () => {
   it('mounts no summaries while account access is loading', () => {
     state.loading = true; show();
@@ -43,5 +44,10 @@ describe('Home audience protection', () => {
     expect(host.textContent).toContain('Booked vs sold');
     expect(state.queries).toHaveBeenCalled(); expect(state.pulse).toHaveBeenCalled();
     expect(sessionStorage.getItem(HOME_SEEN_KEY)).toBe('1');
+  });
+  it('shows demo accounts the sample numbers instead of live data', () => {
+    state.sandbox = true; show();
+    expect(host.textContent).toContain('Sample test');
+    expect(host.textContent).not.toContain('Welcome back.');
   });
 });

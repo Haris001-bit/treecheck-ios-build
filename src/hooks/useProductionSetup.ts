@@ -9,6 +9,17 @@ export interface TeamMember { user_id: string; email: string; seat_type: string 
 
 export interface ImportResult { definition: RateCardDefinition; findings: Finding[]; warnings: string[] }
 
+// Draft and settings saves still on their way to the database. A read waits for them, so the setup page opened
+// again right after an edit (leaving it saves what's pending) reads what was saved, never the copy from before.
+const pendingSaves = new Set<Promise<unknown>>();
+function trackSave(write: PromiseLike<{ error: unknown }>): Promise<{ error: unknown }> {
+  const p = Promise.resolve(write);
+  pendingSaves.add(p);
+  const done = () => { pendingSaves.delete(p); };
+  p.then(done, done);
+  return p;
+}
+
 /** Settings, the draft card, the published versions and the team, for Settings > Crews & pricing. */
 export function useProductionSetup(enabled: boolean) {
   const { effectiveContractorId, user } = useAuth();
@@ -19,7 +30,11 @@ export function useProductionSetup(enabled: boolean) {
   const q = useQuery({
     queryKey: key,
     enabled: enabled && !!owner,
+    // The page edits a copy of the draft and loads it only from a read made after it opened (isFetchedAfterMount):
+    // the cached copy can be older than what was saved since.
+    refetchOnMount: 'always',
     queryFn: async () => {
+      if (pendingSaves.size) await Promise.allSettled([...pendingSaves]);
       const [s, c, m] = await Promise.all([
         productionDb.from('production_settings').select('*').eq('contractor_id', owner).maybeSingle(),
         productionDb.from('production_rate_cards').select('id,label,branch_key,status,version,effective_from,published_at,definition,updated_at')
@@ -63,13 +78,13 @@ export function useProductionSetup(enabled: boolean) {
   const saveDefinition = async (cardId: string, definition: RateCardDefinition, label?: string) => {
     const patch: Record<string, unknown> = { definition };
     if (label !== undefined) patch.label = label;
-    const { error } = await productionDb.from('production_rate_cards').update(patch).eq('id', cardId).eq('status', 'draft');
+    const { error } = await trackSave(productionDb.from('production_rate_cards').update(patch).eq('id', cardId).eq('status', 'draft'));
     if (error) throw error;
   };
 
   const saveSettings = async (patch: Partial<SettingsRow>) => {
     if (!owner) return;
-    const { error } = await productionDb.from('production_settings').update(patch).eq('contractor_id', owner);
+    const { error } = await trackSave(productionDb.from('production_settings').update(patch).eq('contractor_id', owner));
     if (error) throw error;
   };
 

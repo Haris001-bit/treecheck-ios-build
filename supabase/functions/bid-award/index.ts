@@ -230,9 +230,10 @@ Deno.serve(async (req) => {
           legacyOwnerCost: Number(request.owner_cost ?? 0),
         }),
       );
-      // Use the price the owner/office picked on the Bid Board for this offer, if any.
+      // Use the price the owner/office picked on the Bid Board for this offer, or the AI price picked
+      // for the whole job before any offer came in (no bid_id), if any.
       const pick = (request as any).quote_pick;
-      const pickedAmount = pick && pick.bid_id === winningBid.id && Number(pick.amount) > 0 ? Number(pick.amount) : null;
+      const pickedAmount = pick && (pick.bid_id === winningBid.id || !pick.bid_id) && Number(pick.amount) > 0 ? Number(pick.amount) : null;
       const salePrice = pickedAmount ?? priced.baseSale ?? 0;
       const ownerKeeps = (priced.baseBreakdown?.owner ?? 0) + (salePrice - (priced.baseSale ?? salePrice));
       const ownerPercentLabel = priced.baseBreakdown && salePrice > 0
