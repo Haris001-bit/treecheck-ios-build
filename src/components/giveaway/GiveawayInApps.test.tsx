@@ -98,8 +98,17 @@ describe('the Official Rules', () => {
   it('name the apps as a way to enter and say Apple and Google are not part of it', () => {
     mount(<MemoryRouter initialEntries={['/giveaway/rules']}><GiveawayRules /></MemoryRouter>);
     expect(host.textContent).toContain('in the TreeCheck app for iPhone or Android');
-    expect(leaf('Apple Inc. and Google LLC are not sponsors of this giveaway and are not involved in it in any way.')).toBeDefined();
+    expect(host.textContent).toContain('Apple and Google are not sponsors of this giveaway and are not involved in it in any way.');
     expect(links()).toContain('/start-trial');
+  });
+
+  it('are complete: no "To confirm" left, and the sponsor is the App Store seller (Apple 5.3.1)', () => {
+    mount(<MemoryRouter initialEntries={['/giveaway/rules']}><GiveawayRules /></MemoryRouter>);
+    expect(host.textContent).not.toContain('To confirm');
+    expect(host.textContent).not.toContain('Draft');
+    expect(host.querySelector('mark')).toBeNull();
+    expect(host.textContent).toContain('TRADES MARKETING AI LLC');
+    expect(host.textContent).toContain("canceling before it ends doesn't cancel the entry");
   });
 
   it('opened from the apps, link nowhere into the website signup or prices (Apple 3.1.1)', () => {
@@ -129,7 +138,7 @@ describe('phone app signups enter the giveaway', () => {
       source: 'app-signup', status: 'awaiting_trial', email: 'pat@example.com', phone: null, region: 'OK', country: 'US',
       rules_version: GIVEAWAY_RULES_VERSION, ip: '203.0.113.7', user_agent: 'TreeCheck iOS',
     }) }]);
-    expect(GIVEAWAY_RULES_VERSION).toBe('2026-10-29');
+    expect(GIVEAWAY_RULES_VERSION).toBe('2026-10-29b');
   });
 
   it('one entry per email: a second signup with the same email is a duplicate, and nothing ever throws', async () => {
@@ -159,5 +168,18 @@ describe('phone app signups enter the giveaway', () => {
   it('the draw counts live billing only, so App Review and sandbox test purchases never win', () => {
     const src = read('supabase', 'functions', 'giveaway-draw', 'index.ts');
     expect(src).toMatch(/\.from\('company_billing'\)\.select\('owner_id'\)\s*\.in\('owner_id', ids\)\.eq\('environment', 'live'\)/);
+  });
+
+  it('a store trial that started counts even after it expires, like a canceled Stripe trial', () => {
+    const src = read('supabase', 'functions', 'giveaway-draw', 'index.ts');
+    expect(src).toContain('stripe_subscription_id.not.is.null,provider.in.(app_store,play_store),status.in.');
+    const expired = storePlanDecision(
+      { type: 'EXPIRATION', product_id: 'treecheck_core_monthly', store: 'PLAY_STORE', environment: 'PRODUCTION', expiration_at_ms: Date.now() },
+      { pricing_version: '2026-10', provider: 'play_store', environment: 'live', status: 'trialing' },
+      { sandboxAllowed: false, blocker: null, now: Date.now() },
+    );
+    if (expired.kind !== 'write') throw new Error(`expected a write, got ${expired.kind}`);
+    expect(expired.update.status).toBe('canceled');
+    expect(expired.update).not.toHaveProperty('provider');
   });
 });

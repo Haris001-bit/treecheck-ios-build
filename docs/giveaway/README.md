@@ -1,0 +1,9 @@
+# RipSaw RS2511 giveaway
+
+Runs October 26 to November 30, 2026 (Central Time) on the website and, from release 1.4, in the iPhone and Android apps.
+
+- **Entering is starting the 14-day trial.** On the website `create-trial-signup` records the entry: "entered" for a no-card trial, or "awaiting_trial" when the signup goes to card checkout. In the apps `create-ios-register` records an "awaiting_trial" entry, because the trial starts next, when the owner picks a plan in the App Store or Google Play. One entry per email.
+- **The draw** (`giveaway-draw`, admins only, from Settings > Admin > Giveaway) first marks "awaiting_trial" entries as entered when that owner's live billing shows the trial started: a Stripe subscription, a store plan (it keeps its provider after it expires), or a trialing, active or past-due status. Test purchases (environment sandbox: App Review, the sandbox test logins) never count. Then it picks one entered entry at random, with no weighting.
+- **Official Rules** live in `src/pages/GiveawayRules.tsx` (the `RULES` object). The apps open the website's page in the in-app browser (`GiveawayRulesLink`, `?in_app=1` hides its links into signup and prices), so a change to the rules reaches the apps with Publish alone. Bump `GIVEAWAY_RULES_VERSION` in `supabase/functions/_shared/giveaway.ts` when the rules change, and redeploy `create-trial-signup` and `create-ios-register`.
+- **Store rules:** the banner on each phone says the store isn't a sponsor (Apple 5.3.2), the rules' sponsor is the app's developer, TRADES MARKETING AI LLC (5.3.1), and the apps never show Stripe prices (3.1.1).
+- The dates live in two files, `src/lib/giveaway.ts` and `supabase/functions/_shared/giveaway.ts`; a test keeps them equal.

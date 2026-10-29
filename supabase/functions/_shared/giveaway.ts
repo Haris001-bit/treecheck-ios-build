@@ -4,8 +4,9 @@
 // signups as entered once their trial has started.
 // deno-lint-ignore-file no-explicit-any
 export const GIVEAWAY_ID = "ripsaw-rs2511-2026";
-/** Changes with the Official Rules. 2026-10-29: the phone apps as a way to enter, and the Apple and Google section. */
-export const GIVEAWAY_RULES_VERSION = "2026-10-29";
+/** Changes with the Official Rules. 2026-10-29: the phone apps as a way to enter and the Apple and Google section;
+ *  2026-10-29b: every field filled in (no "To confirm" left). */
+export const GIVEAWAY_RULES_VERSION = "2026-10-29b";
 /** Entries count from Oct 26, 2026 at 12:00 AM Central (CDT). The official start date is still to be confirmed. */
 export const GIVEAWAY_STARTS_AT = "2026-10-26T05:00:00.000Z";
 /** Ends Nov 30, 2026 at 11:59:59 PM Central (CST, UTC-6). */

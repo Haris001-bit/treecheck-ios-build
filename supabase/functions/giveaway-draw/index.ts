@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body?.action === 'refresh' ? 'refresh' : 'draw';
 
-    // Card-checkout and phone app signups: entered once their trial has started. Live billing only, so test purchases
+    // Card-checkout and phone app signups: entered once their trial has started, even if it was canceled later (a Stripe
+    // subscription, or a store plan, which keeps its provider after it expires). Live billing only, so test purchases
     // (App Review and the sandbox test logins) never reach the draw.
     const waiting = await allRows((from) => db.from('giveaway_entries').select('id, user_id')
       .eq('giveaway', GIVEAWAY_ID).eq('status', 'awaiting_trial').order('id').range(from, from + 999));
@@ -50,7 +51,8 @@ Deno.serve(async (req) => {
       const ids = waiting.slice(i, i + 200).map((w) => w.user_id).filter(Boolean);
       if (!ids.length) continue;
       const { data: started, error } = await db.from('company_billing').select('owner_id')
-        .in('owner_id', ids).eq('environment', 'live').or(`stripe_subscription_id.not.is.null,status.in.(${TRIAL_STARTED_BILLING_STATUSES.join(',')})`);
+        .in('owner_id', ids).eq('environment', 'live')
+        .or(`stripe_subscription_id.not.is.null,provider.in.(app_store,play_store),status.in.(${TRIAL_STARTED_BILLING_STATUSES.join(',')})`);
       if (error) throw error;
       const owners = [...new Set((started ?? []).map((s) => s.owner_id))];
       if (!owners.length) continue;

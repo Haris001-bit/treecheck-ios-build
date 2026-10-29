@@ -3,32 +3,33 @@ import { Link, useLocation } from 'react-router-dom';
 import treecheckLogo from '@/assets/treecheck-white-login.png';
 
 /**
- * Official Rules for the RipSaw RS2511 giveaway.
- * EDIT HERE BEFORE LAUNCH: every `null` shows on the page as a highlighted "To confirm" placeholder. Replace it with the
- * approved wording (plain text) and it shows as written. Only the details TreeCheck has confirmed are filled in.
+ * Official Rules for the RipSaw RS2511 giveaway, filled in 2026-10-29 from Mark's 2026-10-26 brief (entry when a trial
+ * starts, no separate free entry, a prize worth more than $1,200), the first full rules draft, and the App Store seller
+ * (Apple 5.3.1: the sponsor is the app's developer). A field set to `null` shows as a highlighted "To confirm" note.
+ * The phone apps open this page from the website, so a change here reaches them with Publish alone.
  */
 const RULES: Record<string, string | null> = {
-  sponsor: null, // Sponsor legal name and mailing address
-  eligibility: null, // Who can enter (for example, owners of tree-care businesses), and who can't (employees, families)
-  age: null, // Minimum age
-  geography: null, // Eligible states, provinces or countries
-  startDate: null, // Giveaway start date and time
+  sponsor: 'TRADES MARKETING AI LLC (TreeCheck), 13496 McRaines Rd, Edmond, OK 73013, United States ("Sponsor").',
+  eligibility: 'Open to legal residents of the 50 United States, the District of Columbia and Canada (excluding Quebec). Employees of Sponsor, and members of their immediate families or households, are not eligible.',
+  age: 'Entrants must be at least 18 years old, or the age of majority in their state, province or territory if that is older, when they enter.',
+  geography: 'The 50 United States, the District of Columbia and Canada, excluding Quebec.',
+  startDate: "October 26, 2026 at 12:00 AM Central Time. Sponsor's computer is the official clock.",
   endDate: 'November 30, 2026 at 11:59 PM Central Time',
-  prize: 'One ported RipSaw RS2511 chainsaw.',
-  retailValue: null, // Approximate retail value (ARV)
-  entryMethod: 'Start a free 14-day TreeCheck trial during the giveaway period, either at app.treecheck.ai/start-trial or in the TreeCheck app for iPhone or Android. In the app, the trial starts when you choose your plan in the App Store or Google Play after creating your account. Each qualifying trial signup is automatically entered once. No separate form or checkbox is needed.',
-  entryLimit: null, // One entry per person and/or per company
+  prize: "One (1) prize: a ported RipSaw RS2511 chainsaw. The prize can't be exchanged for cash or transferred. If it becomes unavailable, Sponsor may substitute a prize of equal or greater value. The prize is provided as is; a ported (modified) saw may not be covered by the original manufacturer's warranty. The winner is responsible for using the prize safely and lawfully.",
+  retailValue: 'More than $1,200 USD.',
+  entryMethod: "Start a free 14-day TreeCheck trial during the giveaway period, either at app.treecheck.ai/start-trial or in the TreeCheck app for iPhone or Android. In the app, the trial starts when you choose your plan in the App Store or Google Play after creating your account. Each qualifying trial signup is automatically entered once. No separate form or checkbox is needed. There is no charge during the trial, and canceling before it ends doesn't cancel the entry.",
+  entryLimit: 'Limit one entry per person and per email address. Extra entries are ignored. Entries made by script, bot or other automated means, or with false information, are void.',
   selection: 'The winner will be selected by random drawing from all eligible entries after the entry period closes. The plan, billing cycle or any other choice made at signup does not affect the odds of being selected.',
-  notification: null, // How and when the winner is notified
-  responseDeadline: null, // How long the winner has to respond before an alternate is drawn
-  acceptance: null, // Prize acceptance requirements (declaration, release, delivery)
-  taxes: null, // Taxes on the prize
-  odds: null, // Odds of winning
-  publicity: null, // Publicity release, if applicable
-  liability: null, // Limitations of liability
-  privacy: null, // How entry information is used
-  voidWhereProhibited: null, // Void where prohibited language
-  governingLaw: null, // Governing law and disputes
+  notification: 'Sponsor will contact the potential winner by email and/or phone using the details given at signup. A Canadian resident must first correctly answer, without help, a time-limited mathematical skill-testing question.',
+  responseDeadline: "The potential winner must reply within 7 days. If the potential winner can't be reached, doesn't reply in time, is found ineligible or doesn't meet these rules, the prize is forfeited and Sponsor may draw an alternate winner.",
+  acceptance: "The potential winner may be required to sign a declaration of eligibility and release before receiving the prize. Sponsor will arrange delivery of the prize to the winner's address in the United States or Canada.",
+  taxes: 'The winner is responsible for all taxes on the prize. A US winner may receive an IRS Form 1099 for the prize value and must provide a tax ID number to claim it.',
+  odds: 'The odds of winning depend on the number of eligible entries received.',
+  publicity: "Except where prohibited, the winner agrees that Sponsor may use their name, city and state or province to announce the winner, without further payment. To learn the winner's name, email support@treecheck.app within 60 days after the giveaway ends.",
+  liability: "By entering, entrants agree to these rules and to Sponsor's decisions, which are final. Sponsor may disqualify anyone who tampers with the entry process or breaks these rules, and may cancel or change the giveaway if fraud, technical failure or anything else beyond its control affects how it runs, in which case it may draw from eligible entries received before the problem. Sponsor is not responsible for lost, late, incomplete or misdirected entries. To the extent the law allows, entrants release Sponsor and its affiliates, employees and agents from any claim arising from the giveaway or from accepting, possessing or using the prize.",
+  privacy: 'Information given at signup is used to run the giveaway and contact the winner, as described in the TreeCheck Privacy Policy at app.treecheck.ai/privacy.',
+  voidWhereProhibited: 'Void where prohibited or restricted by law.',
+  governingLaw: 'These rules are governed by the laws of the State of Oklahoma, without regard to its conflict of law rules.',
 };
 
 function Value({ field, label }: { field: string; label: string }) {
@@ -62,7 +63,7 @@ const SECTIONS: { title: string; body: ReactNode }[] = [
   { title: 'Void where prohibited', body: <Value field="voidWhereProhibited" label="void where prohibited" /> },
   { title: 'Governing law', body: <Value field="governingLaw" label="governing law" /> },
   // Required for the phone apps (Apple 5.3.2): the stores are not part of the giveaway.
-  { title: 'Apple and Google', body: 'Apple Inc. and Google LLC are not sponsors of this giveaway and are not involved in it in any way.' },
+  { title: 'Not affiliated', body: "This giveaway is not sponsored, endorsed or administered by, or associated with, Apple Inc., Google LLC, ECHO Incorporated, or the prize's manufacturer or modifier. Apple and Google are not sponsors of this giveaway and are not involved in it in any way." },
 ];
 
 export default function GiveawayRules() {
@@ -84,7 +85,7 @@ export default function GiveawayRules() {
       </header>
       <main className="container max-w-3xl py-10 space-y-6">
         <h1 className="text-3xl font-black leading-tight">Official Rules: TreeCheck RipSaw RS2511 Giveaway</h1>
-        <p className="text-sm text-muted-foreground"><em>Draft. Details marked "To confirm" will be finalized before launch.</em></p>
+        <p className="text-sm text-muted-foreground"><em>Last updated: October 29, 2026</em></p>
         {SECTIONS.map((s, i) => (
           <section key={s.title} className="space-y-1.5">
             <h2 className="text-lg font-bold">{i + 1}. {s.title}</h2>
