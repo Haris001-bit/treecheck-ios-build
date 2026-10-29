@@ -24,6 +24,7 @@ import { FreeVsTrial } from '@/components/free/FreeVsTrial';
 import { useBillingRollout } from '@/hooks/useBillingRollout';
 import { startCompanyCheckout } from '@/lib/billing/companyCheckout';
 import { GiveawayBanner } from '@/components/giveaway/GiveawayBanner';
+import { StoreCatalog } from '@/components/StoreCatalog';
 import { GiveawayRulesLink } from '@/components/giveaway/GiveawayRulesLink';
 import { giveawayOpen } from '@/lib/giveaway';
 
@@ -81,7 +82,8 @@ function StartTrialForm() {
   const [choice, setChoice] = useState<PlanChoice>({ ownerScout: true, interval: 'month' });
 
   // Sell first, configure second: the overview explains TreeCheck; the signup steps open only when asked for.
-  // This is also the app's first screen. In the phone apps the overview shows no prices (plans are chosen in the store).
+  // This is also the app's first screen. In the phone apps the overview shows the store's own plans and prices
+  // (StoreCatalog, Mark 2026-10-29), never the website's Stripe prices; the plan is bought in the store after signup.
   const [mode, setMode] = useState<'overview' | 'signup'>('overview');
   const iphone = isAppStoreSafeMode();
   const steps = store ? ['Account', 'Finish'] : plans ? ['Plan', 'Account', 'Trial'] : ['Account', 'Trial'];
@@ -266,6 +268,7 @@ function StartTrialForm() {
 
             {/* 3. Plans */}
             {plans && <CompanyCatalog selected={choice} onSelect={setChoice} onStart={startWithPlan} addOns={false} />}
+            {store && <StoreCatalog onStart={() => openSignup(0)} />}
             {!plans && import.meta.env.DEV && <CompanyCatalog onStart={() => openSignup(0)} addOns={false} />}
 
             {/* 4. Giveaway, after TreeCheck is explained */}

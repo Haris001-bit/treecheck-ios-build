@@ -33,14 +33,14 @@ const DMA_FEATURES = [
 
 export const DEMO_URL = 'https://calendly.com/hello-tradesmarketing/30min';
 
-const Item = ({ children }: { children: React.ReactNode }) => (
+export const Item = ({ children }: { children: React.ReactNode }) => (
   <li className="flex items-start gap-2">
     <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" aria-hidden />
     <span>{children}</span>
   </li>
 );
 
-function CoreList() {
+export function CoreList() {
   return (
     <>
       {CORE_FEATURES.map((f) => (
@@ -50,8 +50,13 @@ function CoreList() {
   );
 }
 
+/** Scout's benefits, shared with the phone apps' plans (StoreCatalog). */
+export function ScoutList() {
+  return <>{SCOUT_FEATURES.map((f) => <Item key={f}>{f}</Item>)}</>;
+}
+
 /** Scout's longer explanation, kept out of the price card so the card stays scannable. */
-function ScoutLearnMore() {
+export function ScoutLearnMore() {
   return (
     <Collapsible className="text-sm" onClick={(e) => e.stopPropagation()}>
       <CollapsibleTrigger className="group inline-flex items-center gap-1 font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded">
@@ -230,7 +235,7 @@ export function CompanyCatalog({ selected, onSelect, onStart, addOns = true }: {
         </div>
         <ul className="space-y-2 text-muted-foreground">
           <Item><strong className="font-semibold text-foreground">Everything in Core</strong> — Jobs, Subs, Pulse</Item>
-          {SCOUT_FEATURES.map((f) => <Item key={f}>{f}</Item>)}
+          <ScoutList />
           <Item>Owner account + {CORE_INCLUDED_FIELD_SEATS} field users included</Item>
           <Item>Scout estimating access for 1 person — use it yourself or assign it to a teammate</Item>
         </ul>

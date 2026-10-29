@@ -2,7 +2,7 @@
 // - refresh: marks card-checkout and phone app signups as entered once their trial has started (live billing only).
 // - draw (after entries close): picks one entered, not-yet-drawn entry at random, with no weighting by plan, billing
 //   cycle or anything else; drawing again picks an alternate.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { GIVEAWAY_ENDS_AT, GIVEAWAY_ID, TRIAL_STARTED_BILLING_STATUSES } from '../_shared/giveaway.ts';
 
@@ -28,6 +28,17 @@ async function allRows(query: (from: number) => any): Promise<any[]> {
   }
 }
 
+/** TreeCheck's own test and demo companies (profiles.is_sandbox, such as the live-payment test login) never take part. */
+async function testCompanies(db: SupabaseClient, ids: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await db.from('profiles').select('id').in('id', ids.slice(i, i + 200)).eq('is_sandbox', true);
+    if (error) throw error;
+    for (const p of data ?? []) found.add(p.id);
+  }
+  return found;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -47,6 +58,7 @@ Deno.serve(async (req) => {
     const waiting = await allRows((from) => db.from('giveaway_entries').select('id, user_id')
       .eq('giveaway', GIVEAWAY_ID).eq('status', 'awaiting_trial').order('id').range(from, from + 999));
     let promoted = 0;
+    let testSkipped = 0;
     for (let i = 0; i < waiting.length; i += 200) {
       const ids = waiting.slice(i, i + 200).map((w) => w.user_id).filter(Boolean);
       if (!ids.length) continue;
@@ -54,21 +66,26 @@ Deno.serve(async (req) => {
         .in('owner_id', ids).eq('environment', 'live')
         .or(`stripe_subscription_id.not.is.null,provider.in.(app_store,play_store),status.in.(${TRIAL_STARTED_BILLING_STATUSES.join(',')})`);
       if (error) throw error;
-      const owners = [...new Set((started ?? []).map((s) => s.owner_id))];
+      const startedOwners = [...new Set((started ?? []).map((s) => s.owner_id))];
+      const test = await testCompanies(db, startedOwners);
+      const owners = startedOwners.filter((o) => !test.has(o));
+      testSkipped += startedOwners.length - owners.length;
       if (!owners.length) continue;
       const { data: up, error: upErr } = await db.from('giveaway_entries').update({ status: 'entered' })
         .eq('giveaway', GIVEAWAY_ID).eq('status', 'awaiting_trial').in('user_id', owners).select('id');
       if (upErr) throw upErr;
       promoted += up?.length ?? 0;
     }
-    if (action === 'refresh') return json({ promoted });
+    if (action === 'refresh') return json({ promoted, test_companies_skipped: testSkipped });
 
     if (Date.now() <= Date.parse(GIVEAWAY_ENDS_AT)) {
       return json({ error: 'Entries are still open. You can draw a winner after November 30 at 11:59 PM Central.' }, 400);
     }
-    const pool = await allRows((from) => db.from('giveaway_entries').select('id')
+    const entered = await allRows((from) => db.from('giveaway_entries').select('id, user_id')
       .eq('giveaway', GIVEAWAY_ID).eq('status', 'entered').is('drawn_at', null).lte('created_at', GIVEAWAY_ENDS_AT)
       .order('id').range(from, from + 999));
+    const test = await testCompanies(db, [...new Set(entered.map((e) => e.user_id).filter(Boolean))]);
+    const pool = entered.filter((e) => !e.user_id || !test.has(e.user_id));
     if (!pool.length) return json({ error: 'No entries are left to draw.' }, 400);
 
     const pick = pool[secureIndex(pool.length)];
@@ -77,7 +94,7 @@ Deno.serve(async (req) => {
       .select('id, full_name, email, phone, company_name, region, country, source, created_at, drawn_at').maybeSingle();
     if (upErr) throw upErr;
     if (!winner) return json({ error: 'Someone else drew at the same moment. Refresh and try again.' }, 409);
-    console.log('[GIVEAWAY-DRAW] drawn', { entry: winner.id, pool: pool.length, by: auth.user.id });
+    console.log('[GIVEAWAY-DRAW] drawn', { entry: winner.id, pool: pool.length, testSkipped: entered.length - pool.length, by: auth.user.id });
     return json({ winner, pool: pool.length });
   } catch (e) {
     console.error('[GIVEAWAY-DRAW]', e instanceof Error ? e.message : e);

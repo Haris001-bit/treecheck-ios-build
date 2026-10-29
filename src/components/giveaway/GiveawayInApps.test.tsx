@@ -170,6 +170,16 @@ describe('phone app signups enter the giveaway', () => {
     expect(src).toMatch(/\.from\('company_billing'\)\.select\('owner_id'\)\s*\.in\('owner_id', ids\)\.eq\('environment', 'live'\)/);
   });
 
+  it("TreeCheck's own test and demo companies never count or win, even with live billing", () => {
+    const src = read('supabase', 'functions', 'giveaway-draw', 'index.ts');
+    expect(src).toContain(".from('profiles').select('id').in('id', ids.slice(i, i + 200)).eq('is_sandbox', true)");
+    const handler = src.slice(src.indexOf('Deno.serve('));
+    // Once before marking entries as counted, once before the winner is picked.
+    expect(handler.match(/await testCompanies\(db, /g)?.length).toBe(2);
+    expect(handler.indexOf('await testCompanies(db, startedOwners)')).toBeLessThan(handler.indexOf(".update({ status: 'entered' })"));
+    expect(handler.indexOf('const pool = entered.filter(')).toBeLessThan(handler.indexOf('secureIndex(pool.length)'));
+  });
+
   it('a store trial that started counts even after it expires, like a canceled Stripe trial', () => {
     const src = read('supabase', 'functions', 'giveaway-draw', 'index.ts');
     expect(src).toContain('stripe_subscription_id.not.is.null,provider.in.(app_store,play_store),status.in.');
