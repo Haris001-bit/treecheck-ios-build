@@ -89,7 +89,7 @@ export function StoreCatalog({ onStart }: { onStart: () => void }) {
               <CoreList />
               {seats}
             </ul>
-            <p className="text-muted-foreground border-t border-border pt-3">Review and approve your team's estimates with Core. Add Scout when you need estimating access yourself.</p>
+            <p className="text-muted-foreground border-t border-border pt-3">Review and approve your team’s estimates with Core. Add Scout when you need estimating access yourself.</p>
             {start(core, false)}
           </div>
         )}

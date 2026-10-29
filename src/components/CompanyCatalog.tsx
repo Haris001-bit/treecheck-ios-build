@@ -77,8 +77,12 @@ export function ScoutLearnMore() {
   );
 }
 
-/** Optional website marketing add-on. Information only: it's added after signup, never in trial checkout. */
-export function DmaAddOn({ interval = 'month' }: { interval?: 'month' | 'year' }) {
+/**
+ * Optional website marketing add-on. Information only: it's added after signup, never in trial checkout. `inApp` is the
+ * phone apps' first screen (Mark, 2026-10-29): the same box without the website's Stripe price (Apple 3.1.1, Google Play
+ * billing) and without "add it from Marketing", which the Android app can't sell; Schedule a demo stays.
+ */
+export function DmaAddOn({ interval = 'month', inApp = false }: { interval?: 'month' | 'year'; inApp?: boolean }) {
   const per = interval === 'year' ? 'year' : 'month';
   return (
     <section aria-labelledby="dma-heading" className="rounded-lg border border-dashed border-border p-5 sm:p-6 space-y-3 text-sm text-left">
@@ -94,10 +98,14 @@ export function DmaAddOn({ interval = 'month' }: { interval?: 'month' | 'year' }
           <p><span className="font-semibold">Included</span> <span className="text-muted-foreground">when we build your AI-enabled website. Featured jobs publish straight to your site.</span></p>
         </div>
         <div className="rounded-md border border-border p-3">
-          <p><span className="font-semibold">{formatCents(CATALOG.dma[interval])}/{per} per company</span> <span className="text-muted-foreground">if you keep your current website. We write the content and you copy it into your site.</span></p>
+          {inApp ? (
+            <p><span className="font-semibold">Keeping your current website?</span> <span className="text-muted-foreground">We write the content and you copy it into your site.</span></p>
+          ) : (
+            <p><span className="font-semibold">{formatCents(CATALOG.dma[interval])}/{per} per company</span> <span className="text-muted-foreground">if you keep your current website. We write the content and you copy it into your site.</span></p>
+          )}
         </div>
       </div>
-      <p><span className="font-semibold">Add it anytime after signup</span> <span className="text-muted-foreground">from Marketing in the menu.</span></p>
+      {!inApp && <p><span className="font-semibold">Add it anytime after signup</span> <span className="text-muted-foreground">from Marketing in the menu.</span></p>}
       <a
         href={DEMO_URL}
         target="_blank"

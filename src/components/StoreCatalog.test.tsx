@@ -20,6 +20,7 @@ vi.mock('@/lib/platform', () => ({ isNativeAndroid: () => false, storeName: () =
 vi.mock('@/hooks/useRevenueCat', () => ({ useStorePlanPackages: () => ({ data: state.data, isLoading: state.isLoading }) }));
 
 import { StoreCatalog } from './StoreCatalog';
+import { DmaAddOn } from './CompanyCatalog';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -91,9 +92,27 @@ describe('the plans on the apps’ first screen', () => {
     expect(host.querySelector('[aria-label="Loading plans"]')).not.toBeNull();
   });
 
+  it('the Digital Marketing Agent box in the apps: the same box and demo link, with no website price', () => {
+    act(() => root.render(<MemoryRouter><DmaAddOn inApp /></MemoryRouter>));
+    const text = host.textContent ?? '';
+    expect(text).toContain('Want TreeCheck connected to your website?');
+    expect(text).toContain('Included when we build your AI-enabled website.');
+    expect(text).toContain('Keeping your current website? We write the content and you copy it into your site.');
+    expect(text).toContain('Schedule a demo');
+    expect(text).not.toContain('$');
+    expect(text).not.toContain('Add it anytime after signup');
+  });
+
+  it('the website keeps its own box with the price', () => {
+    act(() => root.render(<MemoryRouter><DmaAddOn /></MemoryRouter>));
+    expect(host.textContent).toMatch(/\$\d+\/month per company/);
+    expect(host.textContent).toContain('Add it anytime after signup');
+  });
+
   it('the start page shows these in the phone apps and the Stripe plans only on the website', () => {
     const page = readFileSync(join(process.cwd(), 'src', 'pages', 'StartTrial.tsx'), 'utf8');
     expect(page).toContain('{store && <StoreCatalog onStart={() => openSignup(0)} />}');
+    expect(page).toContain('{store && <DmaAddOn inApp />}');
     expect(page).toMatch(/const plans = !store && !Capacitor\.isNativePlatform\(\) &&/);
     expect(page).toContain('{plans && <CompanyCatalog');
   });

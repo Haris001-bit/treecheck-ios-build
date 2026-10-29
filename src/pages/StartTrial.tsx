@@ -281,6 +281,8 @@ function StartTrialForm() {
                 <TeammatesInfo interval={choice.interval} />
               </div>
             )}
+            {/* The phone apps: the same box without its website price. No teammates box: the apps add no seats. */}
+            {store && <DmaAddOn inApp />}
 
             {/* Closing CTA; the demo stays secondary */}
             <section className="text-center space-y-3 pb-4">
