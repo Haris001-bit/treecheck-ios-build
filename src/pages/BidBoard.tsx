@@ -147,6 +147,12 @@ export default function BidBoard() {
     // Activity badges update live, but reading one must never move its job.
     .sort((a, b) => Number(needsVisit(b)) - Number(needsVisit(a))
       || b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
+  // A Scout job's price: the owner's own (edited or approved) when there is one, else Scout's AI price.
+  const scoutPrice = (captureId: string) => {
+    const c = captures?.[captureId];
+    const own = !!c && (c.final_price_min ?? c.final_price_max) != null;
+    return { own, min: (own ? c.final_price_min : c?.ai_price_min) ?? null, max: (own ? c.final_price_max : c?.ai_price_max) ?? null };
+  };
   const hasAiPrice = (r: any) => {
     const c = r.capture_id ? captures?.[r.capture_id] : null;
     return !!c && (c.final_price_min ?? c.final_price_max ?? c.ai_price_min ?? c.ai_price_max) != null;
@@ -984,25 +990,38 @@ export default function BidBoard() {
                     />
 
                     {(() => {
-                      // Website jobs: the full range the customer was texted (Scout jobs show theirs above).
+                      // Website jobs: the full range the customer was texted. Scout jobs: the owner's Scout price
+                      // (edited or approved), else Scout's AI price.
                       const l = !(r as any).capture_id && (r as any).lead_id ? leadEstimates?.[(r as any).lead_id] : null;
-                      const range = l ? aiRangeText(l.estimated_cost_min, l.estimated_cost_max) : null;
-                      const mid = l ? aiMidpoint(l.estimated_cost_min, l.estimated_cost_max) : null;
+                      const c = (r as any).capture_id ? captures?.[(r as any).capture_id] : null;
+                      const ownScout = !!c && (c.final_price_min ?? c.final_price_max) != null;
+                      const lo = l ? l.estimated_cost_min : c ? (ownScout ? c.final_price_min : c.ai_price_min) : null;
+                      const hi = l ? l.estimated_cost_max : c ? (ownScout ? c.final_price_max : c.ai_price_max) : null;
+                      const range = aiRangeText(lo, hi);
+                      const mid = aiMidpoint(lo, hi);
                       const jobPick = (r as any).quote_pick;
                       const picked = !!jobPick && !jobPick.bid_id && jobPick.option === 'ai';
+                      const heading = l ? 'AI estimate sent to the customer' : ownScout ? 'Your Scout price' : 'Scout AI price';
+                      const what = l ? 'AI middle price' : ownScout ? 'Scout price' : 'Scout AI price';
                       return range ? (
                         <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
                           <div>
-                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">AI estimate sent to the customer</div>
+                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{heading}</div>
                             <div className="text-lg font-bold text-primary">{range}</div>
                           </div>
                           {mid != null && (
                             <Button type="button" size="sm" variant={picked ? 'default' : 'outline'} onClick={() => pickJobAi(r, mid)}>
                               {picked && <Check className="mr-1 h-4 w-4" />}
-                              {picked ? `Picked: AI middle price ${money(mid)}` : `Pick AI middle price ${money(mid)}`}
+                              {picked ? `Official price: ${money(Number(jobPick.amount) || mid)}` : `Pick ${what} ${money(mid)}`}
                             </Button>
                           )}
-                          {picked && <div className="text-xs text-muted-foreground">{jobPick.picked_by_name || 'The owner'} picked this to quote the customer. Tap again to clear it.</div>}
+                          {picked && (
+                            <div className="text-xs text-muted-foreground">
+                              {jobPick.auto === 'scout_price'
+                                ? 'Picked automatically from your Scout price. Tap a crew offer price to change it, or tap here to clear it.'
+                                : `${jobPick.picked_by_name || 'The owner'} picked this to quote the customer. Tap again to clear it.`}
+                            </div>
+                          )}
                         </div>
                       ) : null;
                     })()}
@@ -1178,11 +1197,12 @@ export default function BidBoard() {
                                     })()}
 
                                     ownerLabel={ownerLabel}
-                                    aiMin={(r as any).capture_id ? captures?.[(r as any).capture_id]?.ai_price_min ?? null
+                                    aiMin={(r as any).capture_id ? scoutPrice((r as any).capture_id).min
                                       : (r as any).lead_id ? leadEstimates?.[(r as any).lead_id]?.estimated_cost_min ?? null : null}
-                                    aiMax={(r as any).capture_id ? captures?.[(r as any).capture_id]?.ai_price_max ?? null
+                                    aiMax={(r as any).capture_id ? scoutPrice((r as any).capture_id).max
                                       : (r as any).lead_id ? leadEstimates?.[(r as any).lead_id]?.estimated_cost_max ?? null : null}
-                                    aiLabel={!(r as any).capture_id && (r as any).lead_id ? 'AI estimate' : undefined}
+                                    aiLabel={(r as any).capture_id ? (scoutPrice((r as any).capture_id).own ? 'Your Scout price' : undefined)
+                                      : (r as any).lead_id ? 'AI estimate' : undefined}
                                     crewShare={Number(((r as any).pricing_inputs ?? {}).crewShare) || undefined}
                                   />
                                 )}

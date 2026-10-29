@@ -98,7 +98,8 @@
     ],
     "create-invitation": [],
     "create-ios-register": [
-      "_shared/consent.ts"
+      "_shared/consent.ts",
+      "_shared/giveaway.ts"
     ],
     "create-lead": [],
     "create-marketing-checkout": [
@@ -633,6 +634,7 @@
       "_shared/callerGuard.ts",
       "_shared/scoutAccess.ts"
     ],
+    "send-password-reset": [],
     "send-push": [],
     "send-review-request": [
       "_shared/tcNotify.ts"

@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { ownerTypedPrice } from './priceEdit.ts';
 
 const N8N_WEBHOOK = 'https://treecheck.app.n8n.cloud/webhook/request-edit';
 
@@ -51,8 +52,8 @@ Deno.serve(async (req) => {
     await admin.from('scout_captures').update({
       status: 'pending',
       final_service: service ?? capture.final_service,
-      final_price_min: price ?? capture.final_price_min,
-      final_price_max: price ?? capture.final_price_max,
+      final_price_min: ownerTypedPrice(capture, price) ?? capture.final_price_min,
+      final_price_max: ownerTypedPrice(capture, price) ?? capture.final_price_max,
       final_notes: notes ?? capture.final_notes,
     }).eq('id', capture_id);
 

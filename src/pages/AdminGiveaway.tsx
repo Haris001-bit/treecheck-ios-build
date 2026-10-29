@@ -29,8 +29,8 @@ async function allEntries(): Promise<Entry[]> {
   }
 }
 
-const SOURCE: Record<string, string> = { 'trial-signup': 'Trial sign-up', 'free-signup': 'Free plan sign-up', 'free-entry': 'Old free entry form' };
-const STATUS: Record<string, string> = { entered: 'Entered', awaiting_trial: 'Waiting on card checkout' };
+const SOURCE: Record<string, string> = { 'trial-signup': 'Trial sign-up', 'app-signup': 'Phone app sign-up', 'free-signup': 'Free plan sign-up', 'free-entry': 'Old free entry form' };
+const STATUS: Record<string, string> = { entered: 'Entered', awaiting_trial: 'Waiting for the trial to start' };
 
 export default function AdminGiveaway() {
   const { isAdmin } = useAuth();
@@ -79,14 +79,14 @@ export default function AdminGiveaway() {
       <div>
         <Badge variant={open ? 'default' : 'secondary'}>{open ? 'ENTRIES OPEN' : 'ENTRIES CLOSED'}</Badge>
         <h1 className="text-3xl font-black mt-3">Ripsaw RS2511 giveaway</h1>
-        <p className="text-muted-foreground mt-1">Entries close {GIVEAWAY_END_LABEL}. Starting the 14-day trial is the entry. Card-checkout signups count once their trial starts. Check the winner against the Official Rules before confirming.</p>
+        <p className="text-muted-foreground mt-1">Entries close {GIVEAWAY_END_LABEL}. Starting the 14-day trial is the entry. Card-checkout and phone app signups count once their trial starts. Check the winner against the Official Rules before confirming.</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           ['Signups', rows.length],
           ['Entered (trial started)', eligible.length],
-          ['Waiting on card checkout', rows.filter((r) => r.status === 'awaiting_trial').length],
+          ['Waiting for the trial to start', rows.filter((r) => r.status === 'awaiting_trial').length],
           ['Drawn', drawn.length],
         ].map(([label, n]) => (
           <Card key={label as string}><CardContent className="pt-4"><div className="text-2xl font-black">{entries.isLoading ? '…' : n}</div><div className="text-xs text-muted-foreground">{label}</div></CardContent></Card>

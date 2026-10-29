@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { parseConsent, recordConsent } from "../_shared/consent.ts";
+import { giveawayOpen, recordGiveawayEntry } from "../_shared/giveaway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,16 @@ serve(async (req) => {
     }, { onConflict: "id" });
 
     if (consent) await recordConsent(supabaseAdmin, req, userId, consent, { email, phone }, "app-signup");
+
+    // Starting the 14-day trial enters the RipSaw giveaway, in the apps as on the website. Here the trial starts next, when
+    // the owner picks a plan in the App Store or Google Play, so the entry waits for it: giveaway-draw counts it once the
+    // store trial shows in company_billing. One entry per email; never blocks or changes the signup.
+    if (giveawayOpen()) {
+      await recordGiveawayEntry(supabaseAdmin, req, {
+        userId, fullName: full_name, email, phone, companyName: company_name, region: body?.state,
+        source: "app-signup", status: "awaiting_trial",
+      });
+    }
 
     // Service area so the new account can see leads in their city.
     if (city && String(city).trim()) {

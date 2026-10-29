@@ -24,6 +24,7 @@ import { FreeVsTrial } from '@/components/free/FreeVsTrial';
 import { useBillingRollout } from '@/hooks/useBillingRollout';
 import { startCompanyCheckout } from '@/lib/billing/companyCheckout';
 import { GiveawayBanner } from '@/components/giveaway/GiveawayBanner';
+import { GiveawayRulesLink } from '@/components/giveaway/GiveawayRulesLink';
 import { giveawayOpen } from '@/lib/giveaway';
 
 /** Free is offered only to Oklahoma companies; the server checks the real state on the map before creating the account. */
@@ -74,8 +75,9 @@ function StartTrialForm() {
   // starts the 14-day trial in Stripe Checkout. Before that, and in the phone apps, signup keeps the no-card trial.
   const rollout = useBillingRollout();
   const plans = !store && !Capacitor.isNativePlatform() && rollout.data?.webLive === true;
-  // The Ripsaw giveaway runs on the website only (the phone apps need a new store release to show it).
-  const showGiveaway = !store && !Capacitor.isNativePlatform() && giveawayOpen();
+  // The Ripsaw giveaway shows on the website and in the phone apps (from 1.4) while entries are open. In the apps the trial,
+  // and so the entry, starts when the owner picks a plan in the App Store or Google Play (create-ios-register records it).
+  const showGiveaway = giveawayOpen();
   const [choice, setChoice] = useState<PlanChoice>({ ownerScout: true, interval: 'month' });
 
   // Sell first, configure second: the overview explains TreeCheck; the signup steps open only when asked for.
@@ -437,7 +439,7 @@ function StartTrialForm() {
               </div>
               <p className="text-muted-foreground">
                 See our <Link to="/privacy" className="text-primary underline">Privacy Policy</Link> and <Link to="/terms" className="text-primary underline">Terms</Link>
-                {showGiveaway && <> · Giveaway <Link to="/giveaway/rules" className="text-primary underline">Official Rules</Link></>}.
+                {showGiveaway && <> · Giveaway <GiveawayRulesLink className="text-primary underline">Official Rules</GiveawayRulesLink></>}.
               </p>
             </fieldset>
 

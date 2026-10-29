@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import treecheckLogo from '@/assets/treecheck-white-login.png';
 import walkthroughVideoAsset from '@/assets/treecheck-grounds-walkthrough-mobile.mp4.asset.json';
 import walkthroughPosterAsset from '@/assets/treecheck-grounds-walkthrough-poster.jpg.asset.json';
+import { assetUrl } from '@/lib/platform';
 import { Smartphone, Apple, Monitor, Download, Share2, MoreVertical, Check, PlayCircle } from 'lucide-react';
 
 type Device = 'ios' | 'android' | 'desktop';
@@ -129,18 +130,18 @@ export default function CrewInstall() {
             <div className="mx-auto w-full max-w-sm overflow-hidden rounded-md border bg-card">
               <video
                 className="mx-auto block aspect-[720/1558] max-h-[70vh] w-full bg-card object-contain"
-                src={walkthroughVideoAsset.url}
+                src={assetUrl(walkthroughVideoAsset)}
                 controls
                 playsInline
                 preload="metadata"
-                poster={walkthroughPosterAsset.url}
+                poster={assetUrl(walkthroughPosterAsset)}
                 aria-label="TreeCheck ground crew walkthrough"
               >
                 Your browser does not support video playback.
               </video>
             </div>
             <a
-              href={walkthroughVideoAsset.url}
+              href={assetUrl(walkthroughVideoAsset)}
               target="_blank"
               rel="noreferrer"
               className="block text-center text-sm font-bold text-primary underline underline-offset-4"

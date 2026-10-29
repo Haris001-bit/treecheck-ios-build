@@ -449,6 +449,13 @@
       "when": 1793119000089,
       "tag": "0063_team_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1793209953040,
+      "tag": "0064_scout_price_default_pick",
+      "breakpoints": true
     }
   ]
 }

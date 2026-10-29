@@ -1,9 +1,11 @@
 // The RipSaw RS2511 giveaway (ends Nov 30, 2026). Mirrors src/lib/giveaway.ts: change both together.
-// Starting the 14-day trial is the entry. Entries are written only here (from create-trial-signup) and drawn only by
-// giveaway-draw, which also marks card-checkout signups as entered once their trial has started.
+// Starting the 14-day trial is the entry. Entries are written only here (from create-trial-signup on the website and
+// create-ios-register in the phone apps) and drawn only by giveaway-draw, which also marks card-checkout and phone app
+// signups as entered once their trial has started.
 // deno-lint-ignore-file no-explicit-any
 export const GIVEAWAY_ID = "ripsaw-rs2511-2026";
-export const GIVEAWAY_RULES_VERSION = "2026-10-26b";
+/** Changes with the Official Rules. 2026-10-29: the phone apps as a way to enter, and the Apple and Google section. */
+export const GIVEAWAY_RULES_VERSION = "2026-10-29";
 /** Entries count from Oct 26, 2026 at 12:00 AM Central (CDT). The official start date is still to be confirmed. */
 export const GIVEAWAY_STARTS_AT = "2026-10-26T05:00:00.000Z";
 /** Ends Nov 30, 2026 at 11:59:59 PM Central (CST, UTC-6). */
@@ -58,7 +60,7 @@ export function placeFor(region: unknown, country?: unknown): { country: "US" | 
   return null;
 }
 
-/** "entered" when the trial has started; "awaiting_trial" when the signup went to card checkout first. */
+/** "entered" when the trial has started; "awaiting_trial" when it starts later (card checkout, or the store plan in the apps). */
 export type EntryStatus = "entered" | "awaiting_trial";
 
 export type GiveawayEntry = {
@@ -68,7 +70,7 @@ export type GiveawayEntry = {
   phone?: string | null;
   companyName?: string | null;
   region?: string | null;
-  source: "trial-signup";
+  source: "trial-signup" | "app-signup";
   status: EntryStatus;
 };
 
@@ -102,5 +104,5 @@ export async function recordGiveawayEntry(admin: any, req: Request, e: GiveawayE
   }
 }
 
-/** A card-checkout signup counts once Stripe has started its trial (or it went on to pay). */
+/** A card-checkout or phone app signup counts once its trial has started (or it went on to pay). */
 export const TRIAL_STARTED_BILLING_STATUSES = ["trialing", "active", "past_due"];

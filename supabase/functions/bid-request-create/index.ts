@@ -200,6 +200,24 @@ Deno.serve(async (req) => {
 
     const { dates: offeredDates, source: dateSource } = await offeredDatesFor(admin, ownerId, isInternal);
 
+    // Demo (sandbox) companies pretend: the job lands in Jobs, nobody real is alerted, and the
+    // "Yes, I need help" details fill in the job Scout already opened instead of making a second one.
+    const demoCompany = (await companyMode(admin, ownerId)) === "sandbox";
+    if (demoCompany && captureId) {
+      const { data: existing } = await admin.from("bid_requests").select("id")
+        .eq("capture_id", captureId).eq("owner_contractor_id", ownerId).is("awarded_bid_id", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (existing) {
+        const { data: updated, error: upErr } = await admin.from("bid_requests").update({
+          title, description, city, role_needed: roleNeeded, needs_stump_grinding: needsStump,
+          stump_diameter_inches: stumpDiameter, audience, pay_mode: payMode, fixed_pay: fixedPay,
+          fixed_pay_type: fixedPayType, equipment_needed: equipmentNeeded, crew_counts: crewCounts,
+          pricing_inputs: body.pricing_inputs && typeof body.pricing_inputs === "object" ? body.pricing_inputs : {},
+        }).eq("id", existing.id).select("*").single();
+        if (upErr) return json({ error: upErr.message }, 400);
+        return json({ success: true, bid_request: updated, recipients: 0, demo: true, sms_sent: 0, date_source: dateSource });
+      }
+    }
     // Every send counts on Free, automatic ones included; the claim happens before anything is saved or texted.
     const newRequestId = crypto.randomUUID();
     if (plan === 'free') {
@@ -284,6 +302,10 @@ Deno.serve(async (req) => {
       request.first_refusal_until = holdUntil;
     }
 
+    // A demo company never texts or pushes anyone; the job just shows up in Jobs.
+    if (demoCompany) {
+      return json({ success: true, bid_request: request, recipients: 0, demo: true, sms_sent: 0, date_source: dateSource });
+    }
     const smsSent = await notifyBidRequest(admin, request, company, notified, { holdUntil });
 
     return json({

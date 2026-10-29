@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, CheckCircle2, ArrowLeft } from 'lucide-react';
 import crewJoinLogo from '@/assets/crew-join-logo.png.asset.json';
+import { assetUrl } from '@/lib/platform';
 import { toast } from 'sonner';
 import { CREW_TRADES } from '@/lib/plans';
 import { reportSeriousError } from '@/lib/errorReporter';
@@ -131,7 +132,7 @@ export default function CrewJoin() {
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
       <Card className="p-6 w-full max-w-md">
         <div className="flex items-center gap-2 mb-1">
-          <img src={crewJoinLogo.url} alt="" className="w-10 h-10 rounded-md object-contain" />
+          <img src={assetUrl(crewJoinLogo)} alt="" className="w-10 h-10 rounded-md object-contain" />
           <h1 className="text-xl font-bold">{company ? `Join ${company}'s crew` : 'Join the crew network'}</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-5">

@@ -48,7 +48,8 @@ describe('the AI gateway answer', () => {
   it('turns gateway refusals into messages a person can act on', async () => {
     const reply = (status: number, body = '') => vi.fn(async () => new Response(body, { status })) as unknown as typeof fetch;
     const base = { apiKey: 'k', model: 'm', name: 'n', schema: {}, content: [], unreadable: 'Could not read it.' };
-    expect(await callResponses(base, reply(402))).toMatchObject({ kind: 'error', status: 402, message: expect.stringContaining('credits') });
+    // Out of AI credits: customers see a neutral message, never "Lovable" (Lovable's wording, 2026-10-27).
+    expect(await callResponses(base, reply(402))).toMatchObject({ kind: 'error', status: 402, message: 'This feature is temporarily unavailable. Please try again later.' });
     expect(await callResponses(base, reply(429))).toMatchObject({ kind: 'error', status: 429 });
     expect(await callResponses(base, reply(400))).toEqual({ kind: 'error', status: 400, message: 'Could not read it.' });
     expect(await callResponses(base, reply(500))).toMatchObject({ kind: 'error', status: 502 });

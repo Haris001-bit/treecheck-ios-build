@@ -284,7 +284,9 @@ Deno.serve(async (req) => {
         .eq('id', ownerId)
         .maybeSingle();
       // A Free preview is never sent to subs on its own; the owner sends jobs from Jobs.
-      if (ownerFlags?.crew_auto_broadcast && !freePreview) {
+      // A demo (sandbox) company always gets the job in Jobs right away; no real sub is ever alerted from it.
+      const demoCompany = (await companyMode(admin, ownerId)) === 'sandbox';
+      if ((ownerFlags?.crew_auto_broadcast || demoCompany) && !freePreview) {
         const { data: existing } = await admin
           .from('bid_requests')
           .select('id')

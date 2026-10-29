@@ -106,10 +106,12 @@ export default function DashboardLayout() {
   // can't use the sub bid board (crew leaders, salespeople) go straight to Crew work. Nothing changes for anyone else.
   const { status: production } = useProductionStatus();
   const crewJobs = production.published && (production.can.dispatch || production.can.field || production.can.price);
-  const jobsPath = crewJobs && (!subsOn || !production.can.dispatch) ? '/dashboard/bid-board/crew' : subsOn ? '/dashboard/bid-board' : null;
+  const isDemo = useProfile().data?.is_sandbox === true;
+  // A demo company's dispatchers open the sub Jobs list (it links to Crew work), so a demo can show
+  // a Scout tree going out to subs ("Yes, I need help") even for an employee-crew company.
+  const jobsPath = crewJobs && (!(subsOn || isDemo) || !production.can.dispatch) ? '/dashboard/bid-board/crew' : (subsOn || (isDemo && production.can.dispatch)) ? '/dashboard/bid-board' : null;
   const needsSetup = !isAdmin && !isTeamMember && !crewLoading && !isCrewOnly && !companyLoading && !company?.onboarding_completed_at;
   const { allowed: pulseAllowed } = usePulseAccess();
-  const isDemo = useProfile().data?.is_sandbox === true;
   // Free plan (Oklahoma owners): Scout and Marketing open their preview versions.
   const freePlan = useFreePlan();
   const onFreePlan = freePlan.data?.plan === 'free' && freePlan.data.is_owner === true;

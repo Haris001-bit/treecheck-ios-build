@@ -108,6 +108,20 @@ export function getWebBaseUrl(): string {
 }
 
 /**
+ * A Lovable asset (an `.asset.json` import) as an address this device can load. Its path (/__l5e/...) is served only by
+ * the website; the phone apps run the bundled page from the device, so there the file comes from the website instead.
+ */
+export function assetUrl(asset: { url: string }): string {
+  let native = false;
+  try {
+    native = Capacitor.isNativePlatform();
+  } catch {
+    native = false;
+  }
+  return native && asset.url.startsWith('/') ? `${WEB_BASE_URL}${asset.url}` : asset.url;
+}
+
+/**
  * Stripe / card payment UI (web only).
  * False in the store builds; use the IAP UI instead when canUseAppleIAP().
  */

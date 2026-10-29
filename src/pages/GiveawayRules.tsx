@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import treecheckLogo from '@/assets/treecheck-white-login.png';
 
 /**
@@ -16,7 +16,7 @@ const RULES: Record<string, string | null> = {
   endDate: 'November 30, 2026 at 11:59 PM Central Time',
   prize: 'One ported RipSaw RS2511 chainsaw.',
   retailValue: null, // Approximate retail value (ARV)
-  entryMethod: 'Start a free 14-day TreeCheck trial at app.treecheck.ai/start-trial during the giveaway period. Each qualifying trial signup is automatically entered once. No separate form or checkbox is needed.',
+  entryMethod: 'Start a free 14-day TreeCheck trial during the giveaway period, either at app.treecheck.ai/start-trial or in the TreeCheck app for iPhone or Android. In the app, the trial starts when you choose your plan in the App Store or Google Play after creating your account. Each qualifying trial signup is automatically entered once. No separate form or checkbox is needed.',
   entryLimit: null, // One entry per person and/or per company
   selection: 'The winner will be selected by random drawing from all eligible entries after the entry period closes. The plan, billing cycle or any other choice made at signup does not affect the odds of being selected.',
   notification: null, // How and when the winner is notified
@@ -61,16 +61,25 @@ const SECTIONS: { title: string; body: ReactNode }[] = [
   { title: 'Privacy', body: <Value field="privacy" label="privacy" /> },
   { title: 'Void where prohibited', body: <Value field="voidWhereProhibited" label="void where prohibited" /> },
   { title: 'Governing law', body: <Value field="governingLaw" label="governing law" /> },
+  // Required for the phone apps (Apple 5.3.2): the stores are not part of the giveaway.
+  { title: 'Apple and Google', body: 'Apple Inc. and Google LLC are not sponsors of this giveaway and are not involved in it in any way.' },
 ];
 
 export default function GiveawayRules() {
+  // The phone apps open this page from the website in their in-app browser (in_app=1, GiveawayRulesLink). From there it
+  // links nowhere into the website's signup and prices (Apple 3.1.1).
+  const inApp = new URLSearchParams(useLocation().search).get('in_app') === '1';
   useEffect(() => { document.title = 'Official Rules: RipSaw RS2511 Giveaway | TreeCheck'; }, []);
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container py-4 flex items-center justify-between gap-3">
-          <Link to="/" className="shrink-0"><img src={treecheckLogo} alt="TreeCheck" className="h-8 sm:h-10 w-auto" /></Link>
-          <Link to="/start-trial" className="text-sm text-muted-foreground hover:text-primary whitespace-nowrap">← Start trial</Link>
+          {inApp ? (
+            <img src={treecheckLogo} alt="TreeCheck" className="h-8 sm:h-10 w-auto" />
+          ) : (
+            <Link to="/" className="shrink-0"><img src={treecheckLogo} alt="TreeCheck" className="h-8 sm:h-10 w-auto" /></Link>
+          )}
+          {!inApp && <Link to="/start-trial" className="text-sm text-muted-foreground hover:text-primary whitespace-nowrap">← Start trial</Link>}
         </div>
       </header>
       <main className="container max-w-3xl py-10 space-y-6">

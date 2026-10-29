@@ -6518,6 +6518,10 @@ export type Database = {
         Returns: Json
       }
       scout_learning_undo: { Args: { p_surface: string }; Returns: Json }
+      scout_price_pick: {
+        Args: { p_max: number; p_min: number }
+        Returns: Json
+      }
       tc_alert_once: {
         Args: { p_bid_request_id: string; p_key: string }
         Returns: boolean

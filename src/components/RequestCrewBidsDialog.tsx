@@ -139,7 +139,9 @@ export function RequestCrewBidsDialog({
       }
       qc.invalidateQueries({ queryKey: ['free-plan'] });
       toast.success(
-        data?.recipients
+        data?.demo
+          ? 'Demo: job sent to subs. It is in Jobs → Active. (Demo accounts never alert real people.)'
+          : data?.recipients
           ? `Sent to ${data.recipients} sub${data.recipients === 1 ? '' : 's'}${data.held_for_first_refusal ? ' — others get it after the head start' : ''}`
           : 'Job created. No subs to alert yet.',
       );

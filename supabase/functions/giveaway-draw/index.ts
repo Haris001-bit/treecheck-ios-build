@@ -1,5 +1,5 @@
 // RipSaw RS2511 giveaway admin actions. Admins only.
-// - refresh: marks card-checkout signups as entered once Stripe has started their trial.
+// - refresh: marks card-checkout and phone app signups as entered once their trial has started (live billing only).
 // - draw (after entries close): picks one entered, not-yet-drawn entry at random, with no weighting by plan, billing
 //   cycle or anything else; drawing again picks an alternate.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body?.action === 'refresh' ? 'refresh' : 'draw';
 
-    // Card-checkout signups: entered once their trial has started in Stripe.
+    // Card-checkout and phone app signups: entered once their trial has started. Live billing only, so test purchases
+    // (App Review and the sandbox test logins) never reach the draw.
     const waiting = await allRows((from) => db.from('giveaway_entries').select('id, user_id')
       .eq('giveaway', GIVEAWAY_ID).eq('status', 'awaiting_trial').order('id').range(from, from + 999));
     let promoted = 0;
@@ -49,7 +50,7 @@ Deno.serve(async (req) => {
       const ids = waiting.slice(i, i + 200).map((w) => w.user_id).filter(Boolean);
       if (!ids.length) continue;
       const { data: started, error } = await db.from('company_billing').select('owner_id')
-        .in('owner_id', ids).or(`stripe_subscription_id.not.is.null,status.in.(${TRIAL_STARTED_BILLING_STATUSES.join(',')})`);
+        .in('owner_id', ids).eq('environment', 'live').or(`stripe_subscription_id.not.is.null,status.in.(${TRIAL_STARTED_BILLING_STATUSES.join(',')})`);
       if (error) throw error;
       const owners = [...new Set((started ?? []).map((s) => s.owner_id))];
       if (!owners.length) continue;

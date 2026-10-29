@@ -2,10 +2,14 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import heroShot from '@/assets/ripsaw-hero.jpg.asset.json';
 import { GIVEAWAY_COPY, GIVEAWAY_DISCLOSURE } from '@/lib/giveaway';
+import { assetUrl, isNativeAndroid, isNativeIOS } from '@/lib/platform';
+import { GiveawayRulesLink } from './GiveawayRulesLink';
 
-/** RipSaw giveaway notice. The caller shows it only while entries are open, on the website. */
+/** RipSaw giveaway notice. The caller shows it only while entries are open, on the website and in the phone apps. */
 export function GiveawayBanner({ ctaTo, onCta }: { ctaTo?: string; onCta?: () => void }) {
   const cta = 'Start my 14-day free trial';
+  // Apple's rule 5.3.2 (and the same on Google Play): the store is not part of the giveaway.
+  const store = isNativeIOS() ? 'Apple' : isNativeAndroid() ? 'Google' : null;
   return (
     <section
       aria-labelledby="giveaway-heading"
@@ -14,7 +18,7 @@ export function GiveawayBanner({ ctaTo, onCta }: { ctaTo?: string; onCta?: () =>
       {/* Decorative: the heading already names the prize, so screen readers don't hear it twice
           and a slow-loading photo never shows alt text in the layout. */}
       <img
-        src={heroShot.url}
+        src={assetUrl(heroShot)}
         alt=""
         aria-hidden="true"
         width={900}
@@ -34,9 +38,10 @@ export function GiveawayBanner({ ctaTo, onCta }: { ctaTo?: string; onCta?: () =>
           ) : (
             <Button type="button" size="sm" className="gradient-primary" onClick={onCta}>{cta}</Button>
           )}
-          <Link to="/giveaway/rules" className="text-sm font-semibold text-primary underline">See Official Rules</Link>
+          <GiveawayRulesLink className="text-sm font-semibold text-primary underline">See Official Rules</GiveawayRulesLink>
         </div>
         <p className="text-xs text-muted-foreground">{GIVEAWAY_DISCLOSURE}</p>
+        {store && <p className="text-xs text-muted-foreground">{store} is not a sponsor of this giveaway and is not involved in it.</p>}
       </div>
     </section>
   );
