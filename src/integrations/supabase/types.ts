@@ -4256,6 +4256,8 @@ export type Database = {
           predicted_plan: Json | null
           status: string
           updated_at: string
+          webhook_reading: Json | null
+          webhook_requested_at: string | null
         }
         Insert: {
           actual_crew?: Json | null
@@ -4280,6 +4282,8 @@ export type Database = {
           predicted_plan?: Json | null
           status?: string
           updated_at?: string
+          webhook_reading?: Json | null
+          webhook_requested_at?: string | null
         }
         Update: {
           actual_crew?: Json | null
@@ -4304,6 +4308,8 @@ export type Database = {
           predicted_plan?: Json | null
           status?: string
           updated_at?: string
+          webhook_reading?: Json | null
+          webhook_requested_at?: string | null
         }
         Relationships: []
       }
@@ -6320,6 +6326,7 @@ export type Database = {
         Args: never
         Returns: {
           avg_error: number
+          hits: number
           jobs: number
           month: string
         }[]

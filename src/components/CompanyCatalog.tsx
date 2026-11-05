@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Check, ChevronDown } from 'lucide-react';
 import type { PlanChoice } from '@/lib/pricing/planChoice';
+import { openOutside } from '@/lib/openOutside';
 
 /** Core + 1 Scout license — the recommended starting package. */
 const RECOMMENDED = {
@@ -17,6 +18,7 @@ const CORE_FEATURES: { name: string; text: string }[] = [
   { name: 'Jobs', text: 'Compare crew bids and schedule work in Jobber' },
   { name: 'Subs', text: 'Find nearby climbers, ground workers, and specialists' },
   { name: 'Pulse', text: 'See if this month is making money and plan for payroll' },
+  { name: 'Marketing', text: 'Job posts written for you to copy into your website' },
 ];
 
 const SCOUT_FEATURES = [
@@ -24,11 +26,6 @@ const SCOUT_FEATURES = [
   "Scout adapts to your company's pricing",
   'Build quotes around costs and target profit margin',
   'Review the final price before the customer sees it',
-];
-
-const DMA_FEATURES = [
-  'Turn job photos and a voice memo into website content',
-  'Help customers discover your work through Google and AI search',
 ];
 
 export const DEMO_URL = 'https://calendly.com/hello-tradesmarketing/30min';
@@ -78,41 +75,21 @@ export function ScoutLearnMore() {
 }
 
 /**
- * Optional website marketing add-on. Information only: it's added after signup, never in trial checkout. `inApp` is the
- * phone apps' first screen (Mark, 2026-10-29): the same box without the website's Stripe price (Apple 3.1.1, Google Play
- * billing) and without "add it from Marketing", which the Android app can't sell; Schedule a demo stays.
+ * Optional website marketing add-on. Information only: it's added after signup, never in trial checkout. The box has no
+ * price, so the phone apps' first screen (`inApp`) shows it exactly like the website, Learn more included (Haris,
+ * 2026-11-06: every change Mark makes reaches the apps). Learn more opens in the in-app browser there.
  */
-export function DmaAddOn({ interval = 'month', inApp = false }: { interval?: 'month' | 'year'; inApp?: boolean }) {
-  const per = interval === 'year' ? 'year' : 'month';
+export const FIRST_IMPRESSION_URL = 'https://tradesmarketing.ai/dma-web';
+
+export function DmaAddOn(_props: { interval?: 'month' | 'year'; inApp?: boolean }) {
   return (
     <section aria-labelledby="dma-heading" className="rounded-lg border border-dashed border-border p-5 sm:p-6 space-y-3 text-sm text-left">
-      <h2 id="dma-heading" className="text-lg font-bold">Want TreeCheck connected to your website?</h2>
-      <div>
-        <p className="font-semibold">{CATALOG.dma.label}</p>
-        <p className="text-muted-foreground">Turn the work you finish into marketing for your next job.</p>
-      </div>
-      <ul className="space-y-2 text-muted-foreground">{DMA_FEATURES.map((f) => <Item key={f}>{f}</Item>)}</ul>
-      <div className="space-y-2">
-        <p className="font-semibold">Two ways to get it:</p>
-        <div className="rounded-md border border-border p-3">
-          <p><span className="font-semibold">Included</span> <span className="text-muted-foreground">when we build your AI-enabled website. Featured jobs publish straight to your site.</span></p>
-        </div>
-        <div className="rounded-md border border-border p-3">
-          {inApp ? (
-            <p><span className="font-semibold">Keeping your current website?</span> <span className="text-muted-foreground">We write the content and you copy it into your site.</span></p>
-          ) : (
-            <p><span className="font-semibold">{formatCents(CATALOG.dma[interval])}/{per} per company</span> <span className="text-muted-foreground">if you keep your current website. We write the content and you copy it into your site.</span></p>
-          )}
-        </div>
-      </div>
-      {!inApp && <p><span className="font-semibold">Add it anytime after signup</span> <span className="text-muted-foreground">from Marketing in the menu.</span></p>}
-      <a
-        href={DEMO_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex w-full items-center justify-center rounded-md border border-primary px-4 py-2 font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors sm:w-auto"
-      >
-        Schedule a demo
+      <h2 id="dma-heading" className="text-lg font-bold">Want posts published straight to your website from the job site?</h2>
+      <p className="text-muted-foreground">Every Core plan includes the Marketing Agent: it writes job posts you copy into your website. We also build First Impression websites, where those posts publish automatically.</p>
+      <a href={FIRST_IMPRESSION_URL} target="_blank" rel="noopener noreferrer"
+        onClick={(e) => { e.preventDefault(); void openOutside(FIRST_IMPRESSION_URL); }}
+        className="inline-flex w-full items-center justify-center rounded-md border border-primary px-4 py-2 font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors sm:w-auto">
+        Learn more
       </a>
     </section>
   );

@@ -1,3 +1,4 @@
+import { ExplainerVideo } from '@/components/ExplainerVideo';
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import DMADemoPreview from '@/components/DMADemoPreview';
 import DMANotConnected from '@/components/DMANotConnected';
 import DMAEmailWorkspace from '@/components/DMAEmailWorkspace';
 import DMASetupForm from '@/components/DMASetupForm';
+import DMAIntro from '@/components/DMAIntro';
 import { useDMASetup } from '@/hooks/useDMASetup';
 
 import {
@@ -43,6 +45,7 @@ export default function DMA() {
   const { isAdmin } = useAuth();
   const marketingSetup = useDMASetup();
   const [editingMarketingSetup, setEditingMarketingSetup] = useState(false);
+  const [triedCopyPaste, setTriedCopyPaste] = useState(false);
   const { data: subscription, isLoading: subLoading } = useDMASubscription();
   const { data: profile } = useProfile();
   const { data: integration, isLoading: integrationLoading } = useDMAIntegration();
@@ -111,8 +114,11 @@ export default function DMA() {
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground mb-1">Digital Marketing Agent</h1>
           <p className="text-muted-foreground">Post a completed job — we handle the rest.</p>
+          <ExplainerVideo video="dma" className="mt-1" />
         </div>
-        <DMAEmailWorkspace />
+        {marketingSetup.data?.free_preview && !marketingSetup.data?.can_generate && !triedCopyPaste
+          ? <DMAIntro onCopyPaste={() => setTriedCopyPaste(true)} />
+          : <DMAEmailWorkspace />}
       </div>
     );
   }
@@ -126,6 +132,7 @@ export default function DMA() {
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground mb-1">Digital Marketing Agent</h1>
           <p className="text-muted-foreground">Post a completed job — we handle the rest.</p>
+          <ExplainerVideo video="dma" className="mt-1" />
         </div>
         <DMAJobSubmission />
         <DMAPublishedPosts />
@@ -150,7 +157,7 @@ export default function DMA() {
             createSub={createSub}
             iapSubscribe={iap ? iapSubscribe : null}
             iapRestore={iap ? iapRestore : null}
-            onNext={() => setStep('meta')}
+            onNext={() => setStep('website')}
           />
         )}
         {step === 'meta' && (
@@ -171,7 +178,7 @@ export default function DMA() {
           <WebsiteStep
             upsertIntegration={upsertIntegration}
             onNext={() => setStep('review')}
-            onBack={() => setStep('google')}
+            onBack={() => setStep('billing')}
           />
         )}
         {step === 'review' && (
@@ -633,18 +640,6 @@ function DoneStep({
       <Card>
         <CardContent className="p-6 space-y-3 text-left">
           <StatusRow
-            label={`Facebook: ${integration?.facebook_page_name || 'Not connected'}`}
-            connected={!!integration?.facebook_page_id}
-          />
-          <StatusRow
-            label={`Instagram: ${integration?.instagram_handle || 'Skipped'}`}
-            connected={!!integration?.instagram_business_account_id}
-          />
-          <StatusRow
-            label={`Google Business: ${integration?.google_business_name || 'Not connected'}`}
-            connected={!!integration?.google_account_id}
-          />
-          <StatusRow
             label={`Website: ${integration?.website_url || (integration?.has_first_impression ? 'Connected' : 'Skipped')}`}
             connected={!!integration?.has_first_impression}
           />
@@ -694,7 +689,8 @@ function DMADashboard({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Digital Marketing Agent</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your automated marketing is running</p>
+          <p className="text-sm text-muted-foreground mt-1">Post finished jobs to your website</p>
+          <ExplainerVideo video="dma" className="mt-1" />
         </div>
         <Badge className="bg-primary/10 text-primary border-0">
           <span className="inline-block h-2 w-2 rounded-full bg-primary mr-2 animate-pulse" />
@@ -711,18 +707,6 @@ function DMADashboard({
           <CardTitle className="text-lg">Connections</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <StatusRow
-            label={`Facebook: ${integration?.facebook_page_name || 'Not connected'}`}
-            connected={!!integration?.facebook_page_id}
-          />
-          <StatusRow
-            label={`Instagram: ${integration?.instagram_handle || 'Not connected'}`}
-            connected={!!integration?.instagram_business_account_id}
-          />
-          <StatusRow
-            label={`Google Business: ${integration?.google_business_name || 'Not connected'}`}
-            connected={!!integration?.google_account_id}
-          />
           <StatusRow
             label={`Website: ${integration?.website_url || (integration?.has_first_impression ? 'Connected' : 'Not connected')}`}
             connected={!!integration?.has_first_impression}

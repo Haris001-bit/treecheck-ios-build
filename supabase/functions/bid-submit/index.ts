@@ -204,7 +204,10 @@ Deno.serve(async (req) => {
           ? `Stump price on "${request.title}" (${request.city}): ${member.full_name ?? "A grinder"} ` +
             `quoted ${money(minPay)}. See the Bid Board.`
           : `New bid on "${request.title}" (${request.city}): ${member.full_name ?? "A crew member"} ` +
-          `offered ${money(minPay)} min / ${money(idealPay)} ideal, crew of ${payload.crew_size ?? "?"}, ` +
+          `offered ${money(minPay)} min / ${money(idealPay)} ideal, ${(() => {
+            const g = payload.ground_crew_size ?? payload.people_count ?? payload.crew_size;
+            return g == null ? "" : `${g} ground worker${g === 1 ? "" : "s"} needed, `;
+          })()}` +
           `~${estHours} hrs, dates: ${cleanDates.slice(0, 4).join(", ")}. See the Bid Board.`;
         const seen = new Set<string>();
         for (const p of people) {

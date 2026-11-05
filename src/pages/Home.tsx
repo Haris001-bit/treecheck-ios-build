@@ -78,16 +78,17 @@ function ScoutAccuracyCard() {
     queryFn: async () => {
       const { data, error } = await (supabase.rpc as any)('home_scout_accuracy');
       if (error) throw error;
-      return (data ?? []) as { month: string; jobs: number; avg_error: number }[];
+      return (data ?? []) as { month: string; jobs: number; avg_error: number; hits: number }[];
     },
   });
   const rows = data ?? [];
   const jobs = rows.reduce((s, r) => s + r.jobs, 0);
+  const hits = rows.reduce((s, r) => s + Number(r.hits ?? 0), 0);
   const acc = (list: typeof rows) => {
     const n = list.reduce((s, r) => s + r.jobs, 0);
     if (!n) return null;
-    const err = list.reduce((s, r) => s + Number(r.avg_error) * r.jobs, 0) / n;
-    return Math.max(0, Math.round(100 - err * 100));
+    const hits = list.reduce((s, r) => s + Number(r.hits ?? 0), 0);
+    return Math.round((hits / n) * 100);
   };
   const d = new Date();
   const ym = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -103,7 +104,7 @@ function ScoutAccuracyCard() {
         <p className="text-sm text-muted-foreground">{jobs} job{jobs === 1 ? '' : 's'} compared so far.</p>
       </> : <>
         <p className="home-number text-3xl font-black tabular-nums">{acc(rows)}<span className="ml-1 text-lg font-light text-muted-foreground">%</span></p>
-        <p className="text-sm text-muted-foreground">AI price vs sold price · {jobs} jobs</p>
+        <p className="text-sm text-muted-foreground">{hits} of {jobs} jobs within range</p>
         {thisAcc != null && lastAcc != null && <Trend now={thisAcc} prev={lastAcc} suffix=" pts" />}
       </>}
     </div>

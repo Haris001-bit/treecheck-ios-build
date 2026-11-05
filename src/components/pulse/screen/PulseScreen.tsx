@@ -146,6 +146,12 @@ export function PulseScreen(props: PulseScreenProps) {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 text-pretty">
       <Header s={s} props={props} />
+      {!firstDay && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">Time period</span>
+          <PeriodFilter value={period} onChange={setPeriod} />
+        </div>
+      )}
 
       {firstDay ? (
         <FirstNumbersCard s={s} jobberImport={props.jobberImport} onOpenSetup={props.onOpenSetup} onReconnect={props.onReconnect} />
@@ -163,7 +169,7 @@ export function PulseScreen(props: PulseScreenProps) {
         )
       ) : (
         <>
-          <PulseCashflowChart series={s.cashflow_30} basis={s.revenue_basis} />
+          {period !== "1" && <PulseCashflowChart series={chartFor(s.cashflow_30, Number(period))} basis={s.revenue_basis} />}
           <CompareSection s={s} p={p} period={period} onPeriod={setPeriod} onDrill={setDrill} />
           <SpendingSection p={p} period={period} labels={labels} onDrill={setDrill} />
         </>
@@ -695,6 +701,14 @@ function FirstNumbersCard({
 // ---------------------------------------------------------------------------
 // Comparison
 
+/** The engine's own daily points, trimmed to the chosen period (no re-adding in the browser). */
+function chartFor(series: Snapshot["cashflow_30"], days: number): Snapshot["cashflow_30"] {
+  if (!series || days >= series.points.length) return series;
+  const points = series.points.slice(-days);
+  const from = points[0]?.date ?? series.from;
+  return { ...series, points, from, partial_from: series.partial_from && series.partial_from > from ? series.partial_from : null };
+}
+
 function PeriodFilter({ value, onChange }: { value: PeriodDays; onChange: (v: PeriodDays) => void }) {
   return (
     <DropdownMenu>
@@ -708,7 +722,7 @@ function PeriodFilter({ value, onChange }: { value: PeriodDays; onChange: (v: Pe
         <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as PeriodDays)}>
-          {(["7", "14", "30"] as PeriodDays[]).map((d) => (
+          {(["1", "7", "14", "30"] as PeriodDays[]).map((d) => (
             <DropdownMenuRadioItem key={d} value={d}>{PERIOD_LABEL[d]}</DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -739,10 +753,9 @@ function CompareSection({
   return (
     <section className="space-y-2" aria-labelledby="pulse-compare">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="pulse-compare" className="text-lg font-bold">{label} vs the {p.days} days before</h2>
-        <PeriodFilter value={period} onChange={onPeriod} />
+        <h2 id="pulse-compare" className="text-lg font-bold">{p.days === 1 ? "Yesterday vs the day before" : `${label} vs the ${p.days} days before`}</h2>
       </div>
-      <p className="text-xs text-muted-foreground">Rolling days ({day(p.last.from)} to {day(p.last.to)}), so these won't match {monthName(s.today)} above.</p>
+      <p className="text-xs text-muted-foreground">{p.days === 1 ? day(p.last.from) : <>Rolling days ({day(p.last.from)} to {day(p.last.to)})</>}, so these won't match {monthName(s.today)} above.</p>
       {!p.last.has_data ? (
         <Card className="p-5"><p className="text-sm text-muted-foreground">No numbers for this period yet.</p></Card>
       ) : (

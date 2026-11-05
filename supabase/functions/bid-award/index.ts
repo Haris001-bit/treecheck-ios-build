@@ -4,7 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireCompanyPermission } from '../_shared/companyPermission.ts';
 import { ensureDraftQuote, loadQuoteRecords, officeQuoteLine, quoteStatusFor, type QuoteOutcome } from "../_shared/jobberQuote.ts";
 import { calculatePricing } from "../_shared/bidPricing.ts";
-import { toPricingInput, withBidExtras, type StoredPricingInputs } from "../_shared/bidPricingInputs.ts";
+import { toPricingInput, withBidExtras, withOwnerRates, type StoredPricingInputs } from "../_shared/bidPricingInputs.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,9 +221,12 @@ Deno.serve(async (req) => {
 
       // Sale price needed to hit the target margin, using the crew's ideal pay
       // (climber plus ground crew when both were hired).
+      const { data: ownerCard } = await admin.from("scout_rate_cards")
+        .select("labor_rate, disposal_per_load, mini_skid_rate, mini_skid_rate_type")
+        .eq("contractor_id", request.owner_contractor_id).maybeSingle();
       const groundCrew: any = groundBid ? (crewMap.get(groundBid.crew_member_id) ?? {}) : null;
       const priced = calculatePricing(
-        toPricingInput(withBidExtras(request.pricing_inputs as StoredPricingInputs | null, winningBid as any), {
+        toPricingInput(withBidExtras(withOwnerRates(request.pricing_inputs as StoredPricingInputs | null, ownerCard as any), winningBid as any), {
           crewMinimum: Number(winningBid.min_pay ?? 0),
           crewIdeal: Number(winningBid.ideal_pay ?? 0),
           committedCrewPay: Number(groundBid?.ideal_pay ?? 0),

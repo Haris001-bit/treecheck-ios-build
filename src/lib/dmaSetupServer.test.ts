@@ -7,8 +7,12 @@ it('an existing website URL is not a publishing connection', () => {
 it('keeps Timber website customers on their original publishing flow', () => {
   expect(connectedPublisher('705cecc2-5926-48c1-a728-b3ebd6b920a2', null)).toBe(true);
 });
-it('does not enable an unconfigured tenant just because it has a publishing URL', () => {
-  expect(connectedPublisher('new-company', { site_provider: 'first_impression', publish_endpoint_url: 'https://example.com/publish' })).toBe(false);
+it('does not enable a tenant just because it has a publishing URL', () => {
+  expect(connectedPublisher('new-company', { publish_endpoint_url: 'https://example.com/publish' })).toBe(false);
+  expect(connectedPublisher('new-company', { site_provider: 'wordpress', publish_endpoint_url: 'https://example.com/publish' })).toBe(false);
+});
+it('an admin-marked First Impression site with a publish address is connected', () => {
+  expect(connectedPublisher('new-company', { site_provider: 'first_impression', publish_endpoint_url: 'https://example.com/publish' })).toBe(true);
 });
 it('server trial access ends at exactly 14 days and does not require a post count', () => {
   const end = '2026-10-15T00:00:00Z';

@@ -69,7 +69,7 @@ export default function StartTrialSuccess() {
                 <div>✓ Team members — add teammates, billing starts after trial</div>
                 <div>✓ DMA — build sample job posts on our demo site</div>
                 <div className="text-muted-foreground pt-1">
-                  Postcards, publishing to your own website, and Jobber sync are
+                  Publishing to your own website and Jobber sync are
                   add-ons you can enable anytime.
                 </div>
               </div>

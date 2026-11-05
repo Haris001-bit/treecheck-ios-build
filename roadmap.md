@@ -127,3 +127,12 @@ Plan approved. Tasks:
 - [x] Email Jobs/Scout/Marketing/Subs summary to Brad, Angie, Mark
 - [x] Brad's password reset email never arrived; find out why and get him a reset link
 - [x] Pulse missing from menu (check why)
+
+## Explainer videos (Nov 5)
+- [x] Jobs: reusable "Watch the explainer video" link + pop-up player on the Jobs page; video converted to mp4 and hosted on the CDN
+- [x] Scout: same link + pop-up on the Scout page (TreeCheck-Scout.mov converted to mp4, hosted on the CDN)
+- [x] Digital Marketing Agent: same link + pop-up on the Marketing page (DMA.mov converted to mp4, hosted on the CDN)
+- [x] Link color changed from green to electric blue on all three pages
+- [x] PDF report of every app change since Oct 27, 2026 for Haris: /mnt/documents/TreeCheck-Changes-since-Oct-27-2026.pdf
+- [ ] Publish the website so the links are live for demo users
+- [x] Add explainer videos to the trial sign-up page feature list

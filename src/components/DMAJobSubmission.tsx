@@ -41,6 +41,8 @@ interface DMAJobSubmissionProps {
   onSubmit?: (data: JobSubmissionData) => void;
   /** Optional override for the post-submit screen. If provided, replaces the built-in success card. */
   renderSuccess?: (args: { result: DMAResult; previews: string[]; reset: () => void }) => React.ReactNode;
+  /** Copy-and-paste Marketing (Mark, 2026-10-29): the exact same screen; only where the finished post goes changes. */
+  submitPost?: (args: { notes: string; neighborhood: string; photoPaths: string[] }) => Promise<void>;
 }
 
 export interface JobSubmissionData {
@@ -79,12 +81,13 @@ async function compressImage(file: File, maxEdge = 1600, quality = 0.78): Promis
 }
 
 
-export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubmissionProps) {
+export default function DMAJobSubmission({ onSubmit, renderSuccess, submitPost }: DMAJobSubmissionProps) {
   const { user } = useAuth();
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [photoLabels, setPhotoLabels] = useState<Array<'before' | 'after' | null>>([]);
   const [notes, setNotes] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sendingPostcards, setSendingPostcards] = useState(false);
   const [postcardsOptIn, setPostcardsOptIn] = useState(false);
@@ -222,12 +225,20 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
       });
 
 
+      if (submitPost) {
+        toast.message('Writing your post…', { description: 'This usually takes 20–40 seconds.' });
+        await submitPost({ notes: notes.trim(), neighborhood: neighborhood.trim(), photoPaths });
+        onSubmit?.({ photos, notes });
+        handleReset();
+        return;
+      }
+
       // 2. Trigger publish — this calls AI + commits to GitHub
       toast.message('Writing your project page…', {
         description: 'This usually takes 20–40 seconds.',
       });
       const { data, error } = await supabase.functions.invoke('dma-publish-project', {
-        body: { notes: notes.trim(), photo_paths: photoPaths },
+        body: { notes: notes.trim(), photo_paths: photoPaths, ...(neighborhood.trim() ? { neighborhood: neighborhood.trim() } : {}) },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -255,6 +266,7 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
     setPreviews([]);
     setPhotoLabels([]);
     setNotes('');
+    setNeighborhood('');
     setStreet('');
     setCity('');
     setStateCode('');
@@ -442,7 +454,7 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
                   )}
                   {photoLabels[i] && (
                     <span className={`absolute bottom-9 left-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded text-white ${photoLabels[i] === 'before' ? 'bg-amber-600' : 'bg-emerald-600'}`}>
-                      {photoLabels[i] === 'before' ? 'Postcard: Before' : 'Postcard: After'}
+                      {photoLabels[i] === 'before' ? 'Before' : 'After'}
                     </span>
                   )}
                   <span className="absolute top-1.5 right-9 p-1 rounded-full bg-background/80 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -578,6 +590,13 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
           </p>
         </div>
 
+        {/* Neighborhood (optional, Mark 2026-10-29): the post uses it as the job's location. */}
+        <div>
+          <Label htmlFor="job-neighborhood" className="text-sm font-medium mb-2 block">Neighborhood (optional)</Label>
+          <Input id="job-neighborhood" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} maxLength={100} placeholder="e.g. Deer Creek" disabled={submitting} />
+          <p className="text-xs text-muted-foreground mt-1.5">If you know the name of the neighborhood, enter it here.</p>
+        </div>
+
         {/* Address */}
         <div>
           <div className="flex items-center justify-between gap-2 mb-1">
@@ -590,7 +609,7 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
               Use current location
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mb-2">Where the job happened — start typing to autocomplete, or tap "Use current location" if you're still on site. Used to target postcards to the surrounding neighborhood.</p>
+          <p className="text-xs text-muted-foreground mb-2">Where the job happened — start typing to autocomplete, or tap "Use current location" if you're still on site.</p>
           <div className="space-y-2">
             <AddressAutocomplete
               value={street}
@@ -627,44 +646,6 @@ export default function DMAJobSubmission({ onSubmit, renderSuccess }: DMAJobSubm
           )}
         </Button>
 
-        {/* Send postcards to neighborhood (opt-in checkbox) */}
-        <div className="pt-3 border-t border-border">
-          <label
-            onClick={(event) => {
-              const target = event.target as HTMLElement;
-              if (target.closest('[role="checkbox"]')) return;
-              openPostcardFlow();
-            }}
-            className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${postcardsOptIn ? 'border-primary/60 bg-primary/5' : 'border-border hover:bg-muted/40'} cursor-pointer`}
-          >
-            <Checkbox
-              checked={postcardsOptIn}
-              onCheckedChange={(v) => {
-                const checked = v === true;
-                if (checked) {
-                  openPostcardFlow();
-                } else {
-                  setPostcardsOptIn(false);
-                  setPhotoLabels((prev) => prev.map(() => null));
-                }
-              }}
-              className="mt-0.5"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-foreground">Send postcards to this neighborhood</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {photos.length < 2
-                  ? 'Tap to see a sample campaign preview.'
-                  : postcardsOptIn
-                    ? 'Postcards queued — will mail after you post this job.'
-                    : 'Mail a before/after postcard to homes within a half-mile.'}
-              </p>
-            </div>
-          </label>
-        </div>
       </CardContent>
     </Card>
 

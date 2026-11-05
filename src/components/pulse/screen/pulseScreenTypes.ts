@@ -88,7 +88,7 @@ export interface PulseDataSource {
   countAsBusiness(row: PulseTxnRow): Promise<void>;
 }
 
-export const PERIOD_LABEL: Record<PeriodDays, string> = { "7": "Last 7 days", "14": "Last 14 days", "30": "Last 30 days" };
+export const PERIOD_LABEL: Record<PeriodDays, string> = { "1": "Yesterday", "7": "Last 7 days", "14": "Last 14 days", "30": "Last 30 days" };
 
 /** Names for the default categories (pulse_seed_categories); a company's own list wins. */
 export const DEFAULT_CATEGORY_LABELS: Record<string, string> = {

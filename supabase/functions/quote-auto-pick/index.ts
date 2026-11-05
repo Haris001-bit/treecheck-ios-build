@@ -21,9 +21,13 @@ Deno.serve(async (req) => {
       .in("owner_contractor_id", [...AUTO_PICK_OWNERS])
       .eq("status", "open").is("quote_pick", null).is("awarded_bid_id", null);
     let picked = 0;
+    const { data: cards } = await admin.from("scout_rate_cards")
+      .select("contractor_id, labor_rate, disposal_per_load, mini_skid_rate, mini_skid_rate_type")
+      .in("contractor_id", [...AUTO_PICK_OWNERS]);
+    const cardOf = new Map((cards ?? []).map((c: any) => [c.contractor_id, c]));
     for (const r of requests ?? []) {
       const { data: bids } = await admin.from("bids").select("*").eq("bid_request_id", r.id);
-      const choice = chooseAutoPick(r as any, (bids ?? []) as any, Date.now());
+      const choice = chooseAutoPick(r as any, (bids ?? []) as any, Date.now(), cardOf.get((r as any).owner_contractor_id) ?? null);
       if (!choice) continue;
       const pick = { ...choice, auto: true, picked_by_name: "TreeCheck", picked_at: new Date().toISOString() };
       // Only if still unpicked, so a pick made a moment ago is never overwritten.

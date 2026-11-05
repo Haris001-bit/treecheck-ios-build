@@ -225,8 +225,8 @@ function payFromDebits(
 describe("engine basics", () => {
   it("is versioned", () => {
     const s = computeSnapshot(input());
-    expect(ENGINE_VERSION).toBe("engine-7");
-    expect(s.engine_version).toBe("engine-7");
+    expect(ENGINE_VERSION).toBe("engine-8");
+    expect(s.engine_version).toBe("engine-8");
     expect(s.today).toBe(TODAY);
     expect(s.computed_at).toBe("2026-10-20T17:00:00Z");
   });
@@ -1398,7 +1398,7 @@ describe("the 7 / 14 / 30 day period filter (engine-3)", () => {
       P14: { revenue: 16000, cost: 12000 },
       P7: { revenue: 8000, cost: 7000 },
     }));
-    expect(Object.keys(s.periods)).toEqual(["7", "14", "30"]);
+    expect(Object.keys(s.periods)).toEqual(["1", "7", "14", "30"]);
     const p14 = s.periods["14"];
     expect(p14.days).toBe(14);
     expect(p14.last).toMatchObject({ key: "L14", from: "2026-10-07", to: "2026-10-20", profit: 8000 });
@@ -1883,7 +1883,7 @@ describe("the month comparison and Home's summary (engine-6)", () => {
     const now = `${TODAY}T17:00:00Z`;
     const s = computeSnapshot(input({ business_accounts: [CHECKING, CARD] }));
     const h = homeSummaryOf(s);
-    expect(h).toMatchObject({ engine_version: "engine-7", today: TODAY, revenue_basis: "completed_jobs", arriving: false });
+    expect(h).toMatchObject({ engine_version: "engine-8", today: TODAY, revenue_basis: "completed_jobs", arriving: false });
     // The bank (5 hours ago) is older than Jobber (30 minutes ago).
     expect(h.updated_at).toBe(hoursBefore(now, 5));
     // Partial windows keep their date but never the label naming the account.

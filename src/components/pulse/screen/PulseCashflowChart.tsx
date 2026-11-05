@@ -6,7 +6,7 @@ import { day, revenueWords, usd } from './pulseScreenTypes';
 /** Receives only engine-calculated daily totals; no queries or client-side financial aggregation. */
 export function PulseCashflowChart({ series, basis, compact = false }: { series?: CashflowSeries; basis: RevenueBasis; compact?: boolean }) {
   const incoming = revenueWords(basis).title;
-  const title = `${incoming} vs costs · past 30 days`;
+  const title = `${incoming} vs costs · past ${series?.points.length ?? 30} days`;
   const hasData = series?.points.some(p => p.revenue !== null || p.cost !== null);
   return <section aria-label={title} className={compact ? 'mt-2 min-w-0' : 'space-y-2'}>
     <h2 className={compact ? 'text-xs text-muted-foreground' : 'text-lg font-bold'}>{title}</h2>

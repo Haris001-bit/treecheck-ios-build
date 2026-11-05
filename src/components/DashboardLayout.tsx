@@ -208,7 +208,8 @@ export default function DashboardLayout() {
         {navItems.map((item) => {
           const baseClass =
             "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full text-left";
-          const locked = item.product ? !hasProduct(item.product) && !(onFreePlan && (item.product === 'scout' || item.product === 'dma')) : false;
+          // Marketing always opens its page, which explains it and offers free sample posts (Mark, 2026-10-29).
+          const locked = item.product && item.product !== 'dma' ? !hasProduct(item.product) && !(onFreePlan && (item.product === 'scout' || item.product === 'dma')) : false;
           const inner = (
             <>
               <item.icon className={cn('w-5 h-5', locked && 'opacity-50')} />

@@ -456,6 +456,41 @@
       "when": 1793209953040,
       "tag": "0064_scout_price_default_pick",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1793282736089,
+      "tag": "0065_calibration_webhook_reading",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1793289788231,
+      "tag": "0066_dma_first_impression_admin_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793290013261,
+      "tag": "0067_core_includes_dma",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793896967806,
+      "tag": "0068_scout_accuracy_hits",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793897692814,
+      "tag": "0069_scout_accuracy_accepted_only",
+      "breakpoints": true
     }
   ]
 }

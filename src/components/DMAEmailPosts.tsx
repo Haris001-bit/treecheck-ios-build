@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { openOutside } from '@/lib/openOutside';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { Camera, ChevronLeft, ChevronRight, Copy, GripVertical, Loader2, Mail, Mic, Save, Square, X } from 'lucide-react';
-import { useSpeechRecognition } from '@/hooks/useAudioRecorder';
+import { Copy, Download, Loader2, Mail, Save, X } from 'lucide-react';
+import DMAJobSubmission from '@/components/DMAJobSubmission';
 import { FreeUsageNote } from '@/components/free/FreeUsageNote';
 import { FreePlanUpsell } from '@/components/free/FreePlanUpsell';
 import { Button } from '@/components/ui/button';
@@ -13,9 +14,52 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
-import { movePhotoInOrder, uploadPhotosInOrder } from '@/lib/dmaPhotoOrder';
 
-interface Post { id: string; title: string; article: string; google_caption: string; facebook_caption: string; instagram_caption: string; status: string; created_at: string; free_preview_locked?: boolean }
+export const FIRST_IMPRESSION_REMINDER = 'This post can be published to your website automatically and instantly with a TreeCheck First Impression website, built by Trades Marketing AI.';
+/**
+ * On every copy-and-paste post (Mark, 2026-10-29): the same content can publish itself from a First Impression website.
+ * The link shows in the phone apps too (Haris, 2026-11-06), opening in the in-app browser.
+ */
+export function FirstImpressionNote() {
+  return <p className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground">
+    {FIRST_IMPRESSION_REMINDER}
+    {' '}<a className="font-semibold text-primary underline" href="https://tradesmarketing.ai/dma-web" target="_blank" rel="noopener noreferrer"
+      onClick={(e) => { e.preventDefault(); void openOutside('https://tradesmarketing.ai/dma-web'); }}>See how it works / Schedule a demo</a>
+  </p>;
+}
+
+interface Post { id: string; title: string; article: string; google_caption: string; facebook_caption: string; instagram_caption: string; status: string; created_at: string; free_preview_locked?: boolean; photo_paths?: string[] }
+/** The job photos go with the post (Mark, 2026-10-29): show them in order so the owner can download and add them to the page. */
+function PostPhotos({ paths }: { paths: string[] }) {
+  const { data: urls } = useQuery({ queryKey: ['dma-post-photos', ...paths], enabled: paths.length > 0, staleTime: 50 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from('lead-photos').createSignedUrls(paths, 3600);
+      if (error) throw error;
+      return (data ?? []).map(d => d.signedUrl).filter(Boolean) as string[];
+    } });
+  if (!paths.length) return null;
+  const download = async (url: string, i: number) => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `job-photo-${i + 1}.jpg`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch { window.open(url, '_blank'); }
+  };
+  return <div className="space-y-2">
+    <Label>Job photos ({paths.length})</Label>
+    <p className="text-xs text-muted-foreground">Add these to your website page in this order. Photo 1 is the cover. Their descriptions (alt text) are at the end of the Website content.</p>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {paths.map((path, i) => <div key={path} className="space-y-1">
+        <div className="aspect-square rounded-md border border-border bg-muted overflow-hidden">
+          {urls?.[i] && <a href={urls[i]} target="_blank" rel="noopener noreferrer"><img src={urls[i]} alt={`Job photo ${i + 1}`} className="h-full w-full object-contain" /></a>}
+        </div>
+        <Button size="sm" variant="outline" className="w-full" disabled={!urls?.[i]} onClick={() => urls?.[i] && download(urls[i], i)}><Download className="h-3.5 w-3.5 mr-1" />Photo {i + 1}</Button>
+      </div>)}
+    </div>
+  </div>;
+}
+
 async function action(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('dma-email-content', { body });
   if (error instanceof FunctionsHttpError) {
@@ -27,66 +71,34 @@ async function action(body: Record<string, unknown>) {
   return data;
 }
 export default function DMAEmailPosts({ canGenerate: fullAccess, freePreview = false, listOnly = false }: { canGenerate: boolean; freePreview?: boolean; listOnly?: boolean }) {
-  const { user, effectiveContractorId } = useAuth();
+  const { effectiveContractorId } = useAuth();
   // Free plan previews use the same form; the server returns only the start of each post.
   const canGenerate = fullAccess || freePreview;
   const [limitMessage, setLimitMessage] = useState('');
-  const speech = useSpeechRecognition();
-  const toggleMemo = () => {
-    if (speech.isListening) {
-      speech.stopListening();
-      const said = speech.transcript.trim();
-      if (said) setNotes(current => (current.trim() ? `${current.trim()} ${said}` : said).slice(0, 5000));
-      speech.resetTranscript();
-    } else {
-      speech.resetTranscript();
-      void speech.startListening();
-    }
-  };
   const qc = useQueryClient();
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
-  const dragIndex = useRef<number | null>(null);
-  useEffect(() => {
-    const urls = files.map(file => URL.createObjectURL(file));
-    setPreviews(urls);
-    return () => urls.forEach(url => URL.revokeObjectURL(url));
-  }, [files]);
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Post | null>(null);
   const query = useQuery({ queryKey: ['dma-email-posts', effectiveContractorId], enabled: !!effectiveContractorId,
     queryFn: async () => {
       if (!effectiveContractorId) return [];
-      const { data, error } = await supabase.from('dma_email_posts').select('id,title,article,google_caption,facebook_caption,instagram_caption,status,created_at,free_preview_locked').eq('contractor_id', effectiveContractorId).order('created_at', { ascending: false }).limit(100);
+      const { data, error } = await supabase.from('dma_email_posts').select('id,title,article,google_caption,facebook_caption,instagram_caption,status,created_at,free_preview_locked,photo_paths').eq('contractor_id', effectiveContractorId).order('created_at', { ascending: false }).limit(100);
       if (error) throw error;
       return data as Post[];
     } });
-  const generate = async () => {
-    setError('');
-    if (!user || !notes.trim() || files.length === 0 || notes.length > 5000) { setError('Add at least one job photo and a short note.'); return; }
-    setBusy(true);
+  // Photos are uploaded by the shared job screen (DMAJobSubmission), in the order shown.
+  const generate = async ({ notes, neighborhood, photoPaths }: { notes: string; neighborhood: string; photoPaths: string[] }) => {
+    setError(''); setLimitMessage('');
     try {
-      const jobId = crypto.randomUUID();
-      const paths = await uploadPhotosInOrder(files, async (file, i) => {
-        if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error('Use JPG, PNG or WebP photos under 10 MB.');
-        const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
-        const path = `dma/${user.id}/${jobId}/photo-${i + 1}.${ext}`;
-        const { error } = await supabase.storage.from('lead-photos').upload(path, file, { contentType: file.type });
-        if (error) throw error;
-        return path;
-      });
-      const data = await action({ action: 'generate', notes: notes.trim(), photo_paths: paths });
+      const data = await action({ action: 'generate', notes, photo_paths: photoPaths, ...(neighborhood ? { neighborhood } : {}) });
       setSelected(data.post);
       qc.invalidateQueries({ queryKey: ['dma-email-posts'] });
-      toast.success(data.post?.free_preview_locked ? 'Your preview is ready.' : 'Your draft is ready.');
+      toast.success(data.post?.free_preview_locked ? 'Your preview is ready.' : 'Your draft is ready.', { description: FIRST_IMPRESSION_REMINDER });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not generate your post.';
-      if (freePreview && /this month/.test(message)) setLimitMessage(message); else setError(message);
-    }
-    finally { setBusy(false); if (freePreview) qc.invalidateQueries({ queryKey: ['free-plan'] }); }
+      if (freePreview && /this month/.test(message)) { setLimitMessage(message); throw new Error('Free DMA previews used for this month.'); }
+      throw e;
+    } finally { if (freePreview) qc.invalidateQueries({ queryKey: ['free-plan'] }); }
   };
   const save = async () => {
     if (!selected) return;
@@ -101,38 +113,14 @@ export default function DMAEmailPosts({ canGenerate: fullAccess, freePreview = f
   const sections = [['article','Website'],['google_caption','Google'],['facebook_caption','Facebook'],['instagram_caption','Instagram']] as const;
   if (listOnly && !query.data?.length) return null;
   return <div className="space-y-7">
-    {!listOnly && <section className="space-y-4">
-      <h2 className="text-lg font-semibold flex items-center gap-2"><Camera className="h-5 w-5 text-primary" />Create a job post</h2>
+    {!listOnly && <div className="space-y-4">
+      <FirstImpressionNote />
       {freePreview && <FreeUsageNote kind="dma" />}
       {limitMessage && <FreePlanUpsell title="Free DMA previews used" body={limitMessage} />}
-      <div className="space-y-2"><Label htmlFor="dma-email-photos">Job photos</Label><Input id="dma-email-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy || !canGenerate}
-        onChange={e => { const chosen = Array.from(e.target.files || []); if (chosen.length > 4) { setError('Choose up to four photos.'); return; } setFiles(chosen); }} />
-        <p className="text-xs text-muted-foreground">Drag and drop photos into the proper order before submitting. The first photo is the cover; photos are sent in the order shown. You can also use the arrows.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {files.map((file, index) => <div key={`${file.name}-${index}`} className="min-w-0 space-y-1" draggable={!busy && canGenerate}
-            onDragStart={event => { dragIndex.current = index; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }}
-            onDragEnd={() => { dragIndex.current = null; }}
-            onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; }}
-            onDrop={event => { event.preventDefault(); const from = dragIndex.current; dragIndex.current = null; if (!busy && canGenerate && from !== null) setFiles(current => movePhotoInOrder(current, from, index)); }}>
-            <div className="relative aspect-square rounded-md border border-border bg-muted overflow-hidden cursor-move">
-              <img src={previews[index]} alt={`Job photo ${index + 1}: ${file.name}`} className="w-full h-full object-contain pointer-events-none" />
-              <span className="absolute top-1 left-1 text-xs px-1.5 py-0.5 rounded bg-background/90 text-foreground">{index === 0 ? '1 · Cover' : index + 1}</span>
-              <GripVertical className="absolute top-2 right-2 h-4 w-4 text-foreground" />
-              <div className="absolute bottom-1 left-1 right-1 flex justify-between">
-                <Button size="icon" variant="outline" className="h-7 w-7" disabled={busy || !canGenerate || index === 0} aria-label={`Move photo ${index + 1} earlier`} title="Move earlier" onClick={() => setFiles(current => movePhotoInOrder(current, index, index - 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                <Button size="icon" variant="outline" className="h-7 w-7" disabled={busy || !canGenerate || index === files.length - 1} aria-label={`Move photo ${index + 1} later`} title="Move later" onClick={() => setFiles(current => movePhotoInOrder(current, index, index + 1))}><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground truncate" title={file.name}>{file.name}</p>
-          </div>)}
-        </div>
-      </div>
-      <div className="space-y-2"><Label htmlFor="dma-email-notes">What did you do on this job?</Label><Textarea id="dma-email-notes" rows={4} maxLength={5000} value={speech.isListening ? `${notes}${notes && speech.transcript ? ' ' : ''}${speech.transcript}` : notes} onChange={e => setNotes(e.target.value)} disabled={busy || !canGenerate || speech.isListening} />
-        <Button type="button" variant="outline" size="sm" disabled={busy || !canGenerate} onClick={toggleMemo}>{speech.isListening ? <><Square className="h-4 w-4 mr-2" />Stop voice memo</> : <><Mic className="h-4 w-4 mr-2" />Record a voice memo</>}</Button>
-        <p className="text-xs text-muted-foreground">Talk about the job; your words are typed into the notes.</p></div>
-      <Button disabled={busy || !canGenerate || files.length === 0 || !notes.trim()} onClick={generate}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}{busy ? 'Writing your content…' : 'Generate content'}</Button>
-      {!canGenerate && <p className="text-sm text-muted-foreground">An active company trial or DMA access is required to create posts.</p>}
-    </section>}
+      {canGenerate
+        ? <DMAJobSubmission submitPost={generate} />
+        : <p className="text-sm text-muted-foreground">An active company trial or DMA access is required to create posts.</p>}
+    </div>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {selected?.free_preview_locked && <section className="space-y-4 border-t border-border pt-5">
       <div className="flex justify-between items-start gap-3"><h2 className="text-lg font-semibold">Your post preview</h2><Button size="icon" variant="ghost" aria-label="Close preview" onClick={() => setSelected(null)}><X className="h-4 w-4" /></Button></div>
@@ -146,7 +134,9 @@ export default function DMAEmailPosts({ canGenerate: fullAccess, freePreview = f
     </section>}
     {selected && !selected.free_preview_locked && <section className="space-y-4 border-t border-border pt-5">
       <div className="flex justify-between items-start gap-3"><h2 className="text-lg font-semibold">Review your content</h2><Button size="icon" variant="ghost" aria-label="Close content editor" onClick={() => setSelected(null)}><X className="h-4 w-4" /></Button></div>
+      <FirstImpressionNote />
       <div className="space-y-2"><Label htmlFor="dma-post-title">Title</Label><Input id="dma-post-title" maxLength={200} value={selected.title} onChange={e => setSelected({ ...selected, title: e.target.value })} /></div>
+      <PostPhotos paths={selected.photo_paths ?? []} />
       <Tabs defaultValue="article"><TabsList className="w-full grid grid-cols-4">{sections.map(([key, title]) => <TabsTrigger key={key} value={key} className="px-1 text-xs sm:text-sm">{title}</TabsTrigger>)}</TabsList>
         {sections.map(([key, title]) => <TabsContent key={key} value={key} className="space-y-3"><Label htmlFor={`dma-post-${key}`}>{title} content</Label><Textarea id={`dma-post-${key}`} rows={10} maxLength={key === 'article' ? 20000 : 5000} value={selected[key]} onChange={e => setSelected({ ...selected, [key]: e.target.value })} /><Button variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(selected[key]); toast.success('Copied.'); } catch { toast.error('Could not copy. Select the content to copy it.'); } }}><Copy className="h-4 w-4 mr-2" />Copy {title} content</Button></TabsContent>)}
       </Tabs>

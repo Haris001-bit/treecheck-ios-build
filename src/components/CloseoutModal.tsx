@@ -271,7 +271,7 @@ export function CloseoutModal({ open, onOpenChange, purchaseId, leadId, customer
           <AlertDialogHeader>
             <AlertDialogTitle>Digital Marketing Agent — coming soon</AlertDialogTitle>
             <AlertDialogDescription>
-              The DMA turns every finished job into a featured page on your site, posts it to Google + social, and mails branded postcards to the neighbors — turning one tree into a whole street of leads. Want a 30-minute walkthrough?
+              The DMA turns every finished job into a featured page on your website, with ready-to-paste Google, Facebook and Instagram captions. Want a 30-minute walkthrough?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

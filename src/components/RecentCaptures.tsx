@@ -144,17 +144,7 @@ export function RecentCaptures({ onOpen, refreshKey }: Props) {
           </div>
           <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
         </button>
-        {isAdmin && r.address_street && r.address_city && r.address_state && r.address_zip && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setPostcardFor(r); }}
-            aria-label="Send postcard"
-            title="Send postcard"
-            className="p-3 text-muted-foreground hover:text-primary transition shrink-0"
-          >
-            <Mail className="w-4 h-4" />
-          </button>
-        )}
+        {/* Neighborhood postcards were retired (Mark, Nov 2026). */}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setPendingDelete(r); }}

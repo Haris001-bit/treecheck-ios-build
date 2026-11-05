@@ -110,7 +110,7 @@ import type { WindowTotals } from "./types.ts";
 // engine-5 (2026-10-06): the "Not counted" list knows loan payments (sorter-6, Joe Evans: not a cost).
 // engine-6 (2026-10-15): the month comparison (`month`: this month so far against the same days of last
 // month, window PMTD) and homeSummaryOf, the numbers Home's Pulse card shows.
-export const ENGINE_VERSION = "engine-7";
+export const ENGINE_VERSION = "engine-8";
 
 // ---------------------------------------------------------------------------
 // Thresholds (defaults; Joe can adjust)
@@ -354,8 +354,8 @@ export function cashflowWindows(today: string) {
 }
 
 /** The period filter's choices, in days. */
-export type PeriodDays = "7" | "14" | "30";
-export const PERIOD_DAYS: readonly PeriodDays[] = ["7", "14", "30"];
+export type PeriodDays = "1" | "7" | "14" | "30";
+export const PERIOD_DAYS: readonly PeriodDays[] = ["1", "7", "14", "30"];
 
 /** One period of the filter: the last N days against the N days before, and where the money went. */
 export interface PeriodView {
@@ -1514,6 +1514,7 @@ export function computeSnapshot(input: EngineInput): Snapshot {
     payroll,
     spending: { L7: spendingOf(summaries.L7, totals.L7), L30: spendingOf(l30, totals.L30) },
     periods: {
+      "1": periodOf(1, "L1", "P1", summaries, totals),
       "7": periodOf(7, "L7", "P7", summaries, totals),
       "14": periodOf(14, "L14", "P14", summaries, totals),
       "30": periodOf(30, "L30", "P30", summaries, totals),

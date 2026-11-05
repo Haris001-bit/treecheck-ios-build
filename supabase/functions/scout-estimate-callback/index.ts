@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { recordScoutResult } from '../_shared/scoutLearning.ts';
+import { storeCalibrationReading } from '../_shared/calibrationWebhook.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -50,6 +51,11 @@ Deno.serve(async (req) => {
 
     // The service the rep selected in Scout always wins over what n8n returns.
     const { data: capRow } = await admin.from('scout_captures').select('requested_service, free_preview_locked, owner_id').eq('id', capture_id).maybeSingle();
+    // A calibration photo (setup) answered here instead of its own callback: save the reading only.
+    // No texts, pushes or Scout learning rows for calibration photos.
+    if (!capRow && await storeCalibrationReading(admin, String(capture_id), body ?? {})) {
+      return new Response(JSON.stringify({ ok: true, calibration: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const locked = capRow?.free_preview_locked === true;
     const requested = capRow?.requested_service as string | null;
     if (requested === 'Pruning/Trimming') {

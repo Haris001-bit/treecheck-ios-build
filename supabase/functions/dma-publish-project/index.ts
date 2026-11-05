@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { DEMO_OWNER_ID, demoPostUrl, liveSince } from "../_shared/demoCompany.ts";
+import { jobNotesMessage } from "../_shared/dmaFormula.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -203,6 +204,7 @@ const GENERATOR_TOOL = {
 
 interface PublishRequest {
   notes?: string;
+  neighborhood?: string; // optional, typed by the contractor (Mark, 2026-10-29)
   photo_paths?: string[]; // storage paths in lead-photos bucket, e.g. "dma/<jobId>/photo1.jpg"
   // Revision mode: fix an already-published post from a casual voice memo.
   project_id?: string;
@@ -1113,7 +1115,7 @@ IMPORTANT: The brand voice guidelines above are the canonical source of truth fr
             content: [
               { type: "text", text: isRevision
                 ? `You already published this featured project page. Here is the exact published content as JSON:\n\n${JSON.stringify(existingRow!.copy)}\n\nThe contractor recorded a casual voice memo asking for corrections. Transcript:\n\n"${revisionInstruction}"\n\nReturn the corrected project through the tool.\nRULES:\n- The contractor's correction is FACT. Apply it faithfully.\n- Change ONLY what they asked for, plus anything that is now factually inconsistent with their correction. Leave every other sentence byte-identical.\n- Keep the slug exactly "${existingRow!.slug}". Never change it.\n- Keep the same structure, section count, headings and tone.\n- Never invent details that were not stated. Never name or guess a tree species.\n- If they ask to remove something, remove it cleanly rather than rewording around it.`
-                : `Contractor notes about this completed job:\n\n${body.notes}\n\nNumber of photos provided: ${photoBlobs.length}. Generate the featured project now.` },
+                : `${jobNotesMessage(body.notes!, typeof body.neighborhood === "string" ? body.neighborhood : "")}\n\nNumber of photos provided: ${photoBlobs.length}. Generate the featured project now.` },
 
               ...photoMessages,
             ],

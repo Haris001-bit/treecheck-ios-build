@@ -52,6 +52,9 @@ Deno.serve(async req => {
     // Free plan (Oklahoma owners): the owner can set up DMA and make preview posts, never full posts.
     const freePreview = auth.user.id === owner && (await companyPlan(db, owner)) === 'free';
     if (freePreview) canManage = true;
+    // An owner whose plan doesn't include Marketing may still set it up and make sample posts, never full ones.
+    const sampleOwner = auth.user.id === owner && !canManage;
+    if (sampleOwner) canManage = true;
     if (auth.user.id !== owner) {
       const { data: member, error } = await db.from('team_member_access').select('member_kind,permissions,status').eq('owner_id', owner).eq('user_id', auth.user.id).maybeSingle();
       if (error) throw error;
@@ -77,8 +80,16 @@ Deno.serve(async req => {
         if (!error && !data?.error) canGenerate = data?.subscribed === true || data?.beta_enabled === true;
       }
     }
-    if (parsed.data.action === 'status') return json({ setup, connected: connectedPublisher(owner, integration), can_manage: canManage, can_generate: canGenerate, free_preview: freePreview && !canGenerate, trial_ends_at: trialActive ? trialEnd : null,
-      defaults: { company_name: profile.company_name || '', contact_name: profile.full_name || '', delivery_email: profile.email || '', service_area: '', website_url: integration?.public_site_url || integration?.website_url || '' } });
+    if (sampleOwner) canGenerate = false;
+    // Posting must work without the setup form (Mark, 2026-10-29): the service area defaults to the company's own Jobs service areas.
+    let defaultArea = '';
+    if (parsed.data.action === 'status' && !setup?.service_area) {
+      const { data: areas } = await db.from('service_areas').select('city,region').eq('contractor_id', owner).order('created_at').limit(3);
+      defaultArea = (areas || []).map(a => [a.city, a.region].filter(Boolean).join(', ')).filter(Boolean).join('; ').slice(0, 200);
+    }
+    if (parsed.data.action === 'status') return json({ setup, owner_id: owner, connected: connectedPublisher(owner, integration), can_manage: canManage, can_generate: canGenerate, // Any owner without Marketing gets the Free plan's sample posts (Mark, 2026-10-29), so the menu item invites a try.
+      free_preview: (freePreview || auth.user.id === owner) && !canGenerate, trial_ends_at: trialActive ? trialEnd : null,
+      defaults: { company_name: profile.company_name || '', contact_name: profile.full_name || '', delivery_email: profile.email || '', service_area: defaultArea, website_url: integration?.public_site_url || integration?.website_url || '' } });
     const values = parsed.data.values;
     const voice = brandVoice(values.voice_answers);
     const { data: saved, error: saveError } = await db.from('dma_company_setup').upsert({ ...values, contractor_id: owner, brand_voice: voice,

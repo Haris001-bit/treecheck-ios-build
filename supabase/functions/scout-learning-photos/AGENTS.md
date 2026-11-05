@@ -1,0 +1,1 @@
+- scout-learning-photos (the Scout learning card's photos) is maintained outside Lovable: it reads scout_learning_report as the caller and signs photos only for jobs in that report, for one hour, and never writes anything, because a rep's photo sits in the rep's own storage folder and the owner may see only their own company's jobs.

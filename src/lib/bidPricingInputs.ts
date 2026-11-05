@@ -17,6 +17,8 @@ export interface StoredPricingInputs {
   equipmentCost?: number | null;
   /** Mini skid steer cost per hour (owner-adjustable). */
   miniSkidRate?: number | null;
+  /** True when the mini skid rate is a flat amount per job day instead of per hour. */
+  miniSkidPerDay?: boolean | null;
   stumpCost?: number | null;
   travelCost?: number | null;
   otherCosts?: number | null;
@@ -36,7 +38,7 @@ export const emptyPricingInputs = (): StoredPricingInputs => ({
   disposalLoads: null,
   disposalRate: pricingConfig.disposalRateDefault,
   equipmentCost: 0,
-  miniSkidRate: 100,
+  miniSkidRate: null,
   stumpCost: 0,
   travelCost: 0,
   otherCosts: 0,
@@ -119,7 +121,41 @@ export function withBidExtras(
   // Mini skid steer runs the whole job: hours always match the offer's job length.
   const hrs = Number(bid.mini_skid_hours) > 0 ? Number(bid.mini_skid_hours) : Number(bid.est_hours);
   if (bid.needs_mini_skid && hrs > 0) {
-    out.equipmentCost = (Number((out as any).equipmentCost) || 0) + hrs * (n(out.miniSkidRate) ?? MINI_SKID_RATE);
+    const rate = n(out.miniSkidRate) ?? MINI_SKID_RATE;
+    // Day rate: one charge per 8-hour day the job runs.
+    const cost = out.miniSkidPerDay ? Math.max(1, Math.ceil(hrs / 8)) * rate : hrs * rate;
+    out.equipmentCost = (Number((out as any).equipmentCost) || 0) + cost;
+  }
+  return out;
+}
+
+/** The owner's saved Settings rates (scout_rate_cards) that Jobs pricing should follow. */
+export interface OwnerRateDefaults {
+  labor_rate?: number | null;
+  disposal_per_load?: number | null;
+  mini_skid_rate?: number | null;
+  mini_skid_rate_type?: string | null;
+}
+
+/**
+ * Fills the job's rates from the owner's Settings rates wherever the job has no
+ * rate of its own, so a change in Settings reaches every job that wasn't edited
+ * by hand. A rate typed on one job (in Job costs) still wins for that job.
+ */
+export function withOwnerRates(
+  stored: StoredPricingInputs | null | undefined,
+  card: OwnerRateDefaults | null | undefined,
+): StoredPricingInputs {
+  const out: StoredPricingInputs = { ...(stored ?? {}) } as StoredPricingInputs;
+  if (!card) return out;
+  const labor = n(card.labor_rate);
+  const disposal = n(card.disposal_per_load);
+  const skid = n(card.mini_skid_rate);
+  if (n(out.laborRate) == null && labor != null) out.laborRate = labor;
+  if (n(out.disposalRate) == null && disposal != null) out.disposalRate = disposal;
+  if (n(out.miniSkidRate) == null && skid != null) {
+    out.miniSkidRate = skid;
+    if (card.mini_skid_rate_type === 'day') out.miniSkidPerDay = true;
   }
   return out;
 }

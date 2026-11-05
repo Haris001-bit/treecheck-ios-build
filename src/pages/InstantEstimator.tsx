@@ -1,3 +1,4 @@
+import { ExplainerVideo } from '@/components/ExplainerVideo';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Image as ImageIcon, Mic, MicOff, Sparkles, RotateCcw, Loader2, AlertTriangle, CheckCircle2, Ruler, HelpCircle, Play, Pause, Trash2, MapPin, Pencil, Save, X, ChevronLeft } from 'lucide-react';
@@ -653,6 +654,7 @@ export default function InstantEstimator() {
           <h1 className="text-3xl font-bold">Scout™</h1>
         </div>
         <p className="text-muted-foreground">Capture a tree in the field — review the AI estimate before it goes to the homeowner</p>
+        <ExplainerVideo video="scout" className="mt-2" />
       </div>
 
       {phase === 'input' && capture && capture.status && capture.status !== 'approved' && capture.status !== 'edited' && (

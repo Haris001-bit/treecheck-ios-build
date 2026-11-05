@@ -1,6 +1,10 @@
-// Internal Scout calibration photo reader. Never texts anyone, never creates jobs, never calls n8n.
+// Scout calibration photo reader. Every calibration detail comes from the Scout webhook (n8n), the same AI and the
+// same fields live Scout sends (photos, address, service, trunk size, cleaned notes, company guidance).
+// Its answer goes to calibration-estimate-callback, which saves the reading only: never texts anyone, never creates
+// jobs or Scout learning rows, and never keeps the price.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3";
+import { activeGuidance } from "../_shared/scoutLearning.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,63 +14,73 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status, headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
 
-const MODEL = "openai/gpt-6-astra";
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/responses";
+const N8N_WEBHOOK = "https://treecheck.app.n8n.cloud/webhook/scout-tree-automation";
+const SIGNED_SECONDS = 60 * 60 * 24; // same as live Scout
+
+// Owners don't enter an address for calibration (Mark, 2026-10-29). The Scout webhook needs one, so a fixed
+// stand-in goes in the same address field. It is never shown to the owner and never saved on the calibration.
+export const CALIBRATION_STAND_IN_ADDRESS = { street: "24 E 1st St", city: "Edmond", state: "OK", zip: "73034" };
 
 const Body = z.object({
-  photos: z.array(z.string().regex(/^data:image\/(jpeg|png|webp);base64,/)).min(1).max(4),
+  photos: z.array(z.string().regex(/^data:image\/(jpeg|png|webp);base64,/)).min(1).max(3),
   hints: z.string().max(1000).nullable().optional(),
+  circumferenceInches: z.number().positive().max(700).nullable().optional(),
 });
 
-const conf = { type: "string", enum: ["high", "medium", "low", "unknown"] };
-const field = (valueSchema: Record<string, unknown>) => ({
-  type: "object", additionalProperties: false, required: ["value", "confidence"],
-  properties: { value: valueSchema, confidence: conf },
-});
-const nNum = { type: ["number", "null"] };
-const nBool = { type: ["boolean", "null"] };
-const nEnum = (vals: string[]) => ({ type: ["string", "null"], enum: [...vals, null] });
-const SCHEMA = {
-  type: "object", additionalProperties: false,
-  required: ["dbh_inches", "height_ft", "canopy_dense", "multiple_leaders", "condition", "near_structure", "access", "drop_zone", "power_lines", "crane_indicated", "loads", "tree_count", "observations"],
-  properties: {
-    dbh_inches: field(nNum), height_ft: field(nNum), canopy_dense: field(nBool), multiple_leaders: field(nBool),
-    condition: field(nEnum(["healthy", "declining", "dead"])), near_structure: field(nBool),
-    access: field(nEnum(["easy", "moderate", "tight"])), drop_zone: field(nEnum(["open", "restricted"])),
-    power_lines: field(nBool), crane_indicated: field(nBool), loads: field(nNum), tree_count: field(nNum),
-    observations: { type: "array", items: { type: "string" } },
-  },
-};
-
-const PROMPT = `You are Scout, reviewing photos of a tree-removal job a tree company already completed.
-Estimate the job characteristics before work began. For every field return a value and a confidence.
-If a field cannot be judged from the photos, return value null with confidence "unknown". Never guess to fill a field.
-Do not name or guess the tree species. Give 2-5 short, factual observations.
-dbh_inches = trunk diameter at chest height. loads = chip-truck debris loads. drop_zone "restricted" if targets prevent free felling.`;
+// Same clean-up live Scout (scout-submit) gives field notes before they go to the webhook.
+async function cleanNotes(raw: string): Promise<string> {
+  const notes = raw.trim();
+  if (!notes) return "";
+  try {
+    const aiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!aiKey) return notes;
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${aiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: "You clean up rough field notes from a tree-service estimator into ONE short, simple paragraph (2-4 sentences). STRICT RULES: Do NOT assume, infer, guess, or invent ANY detail that is not explicitly stated in the notes. If something is unclear, garbled, ambiguous, or not understandable, OMIT it entirely — do not try to interpret it. Only include facts that are clearly stated. NEVER identify, guess, or name the tree species (e.g. oak, maple, pine) — even if the notes mention or hint at one, omit the species entirely. No bullet points, no headings, no fluff, no filler. If nothing is clearly understandable, return an empty string." },
+          { role: "user", content: notes },
+        ],
+      }),
+    });
+    if (!res.ok) return notes;
+    const j = await res.json();
+    return j?.choices?.[0]?.message?.content?.trim() || notes;
+  } catch {
+    return notes;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
     const { data: authData } = await admin.auth.getUser(authHeader.replace("Bearer ", ""));
     const user = authData.user;
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const parsed = Body.safeParse(await req.json().catch(() => ({})));
-    if (!parsed.success) return json({ error: "Add 1 to 4 photos (JPG, PNG, or WebP)." }, 400);
+    const raw = await req.json().catch(() => ({}));
+    // Any address an older screen sends is ignored; calibration always uses the hidden stand-in.
+    const parsed = Body.safeParse({ photos: raw?.photos, hints: raw?.hints ?? null, circumferenceInches: raw?.circumferenceInches ?? null });
+    if (!parsed.success) return json({ error: "Add 1 to 3 photos of the tree." }, 400);
 
     const { data: me } = await admin.from("profiles").select("id, parent_contractor_id, role").eq("id", user.id).maybeSingle();
     const ownerId = me?.parent_contractor_id ?? user.id;
     if (!(me?.role === "admin" || me?.role === "contractor" || me?.parent_contractor_id)) return json({ error: "Forbidden" }, 403);
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) return json({ error: "AI is not configured" }, 500);
-
-    // Create the calibration record and store photos.
+    const { hints, circumferenceInches } = parsed.data;
+    const address = CALIBRATION_STAND_IN_ADDRESS;
     const { data: row, error: insErr } = await admin.from("production_calibrations")
-      .insert({ contractor_id: ownerId, owner_hints: parsed.data.hints ? { text: parsed.data.hints } : null, status: "draft" })
+      .insert({
+        contractor_id: ownerId,
+        owner_hints: { text: hints || null, circumference_inches: circumferenceInches ?? null },
+        status: "draft",
+      })
       .select("id").single();
     if (insErr) throw insErr;
 
@@ -76,74 +90,54 @@ Deno.serve(async (req) => {
       const [meta, b64] = parsed.data.photos[i].split(",");
       const ext = meta.includes("png") ? "png" : meta.includes("webp") ? "webp" : "jpg";
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      const path = `calibration/${ownerId}/${row.id}/${i}.${ext}`;
-      const { error: upErr } = await admin.storage.from("lead-photos").upload(path, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
+      // Same bucket and file names as a live Scout photo (scout-submit).
+      const path = i === 0 ? `${user.id}/${row.id}/photo.${ext}` : `${user.id}/${row.id}/photo-${i + 1}.${ext}`;
+      const { error: upErr } = await admin.storage.from("scout-media").upload(path, bytes, { contentType: `image/${ext === "jpg" ? "jpeg" : ext}`, upsert: true });
       if (upErr) throw upErr;
       paths.push(path);
-      const { data: s } = await admin.storage.from("lead-photos").createSignedUrl(path, 600);
+      const { data: s } = await admin.storage.from("scout-media").createSignedUrl(path, SIGNED_SECONDS);
       if (s?.signedUrl) signed.push(s.signedUrl);
     }
     await admin.from("production_calibrations").update({ photo_paths: paths }).eq("id", row.id);
 
-    const content: unknown[] = [{ type: "input_text", text: `${PROMPT}${parsed.data.hints ? `\nOwner notes (may help): ${parsed.data.hints}` : ""}` }];
-    for (const url of signed) content.push({ type: "input_image", image_url: url });
+    const notesSummary = await cleanNotes(hints ?? "");
+    // Company guidance exactly as live Scout gets it; calibration never records Scout learning rows.
+    const learning = await activeGuidance(admin, ownerId, "scout");
+    const diameterInches = circumferenceInches ? Number((circumferenceInches / Math.PI).toFixed(2)) : null;
 
-    const res = await fetch(GATEWAY, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "Lovable-API-Key": apiKey,
-        "X-Lovable-AIG-SDK": "fetch",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        stream: true,
-        store: false,
-        reasoning: { effort: "low", summary: "auto" },
-        include: ["reasoning.encrypted_content"],
-        input: [{ role: "user", content }],
-        text: { format: { type: "json_schema", name: "job_characteristics", strict: true, schema: SCHEMA } },
-      }),
-    });
-    if (!res.ok || !res.body) {
-      const msg = await res.text().catch(() => "");
-      console.error("calibration-analyze gateway", res.status, msg.slice(0, 500));
-      const friendly = res.status === 402 ? "AI credits are used up. Add credits to keep analyzing photos."
-        : res.status === 429 ? "Scout is busy. Try again in a minute." : "Scout couldn't read these photos.";
-      return json({ error: friendly, calibration_id: row.id }, res.status === 402 || res.status === 429 ? res.status : 502);
+    const payload = {
+      capture_id: row.id,
+      photo_url: signed[0] ?? null,
+      photo_urls: signed,
+      voice_memo_url: null,
+      notes_summary: notesSummary || null,
+      service: "Tree Removal",
+      circumference_inches: circumferenceInches ?? null,
+      diameter_inches: diameterInches,
+      address: { ...address, full: `${address.street}, ${address.city}, ${address.state} ${address.zip}` },
+      // Same callback as live Scout; it spots calibration ids and only saves the reading (no texts, no learning rows).
+      callback_url: `${supabaseUrl}/functions/v1/scout-estimate-callback?src=scout`,
+      submitted_at: new Date().toISOString(),
+      company_guidance: learning.block,
+    };
+
+    let sent = false;
+    try {
+      const n8nRes = await fetch(N8N_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Scout-Secret": Deno.env.get("SCOUT_WEBHOOK_SECRET") ?? "" },
+        body: JSON.stringify(payload),
+      });
+      sent = n8nRes.ok;
+      if (!n8nRes.ok) console.error("calibration-analyze n8n non-OK", n8nRes.status, (await n8nRes.text()).slice(0, 300));
+    } catch (e) {
+      console.error("calibration-analyze n8n failed", e);
     }
-
-    // Consume SSE stream.
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = ""; let text = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, idx).trim(); buf = buf.slice(idx + 1);
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const ev = JSON.parse(data);
-          if (ev.type === "response.output_text.delta" && typeof ev.delta === "string") text += ev.delta;
-          if (ev.type === "response.failed" || ev.type === "error") console.error("calibration-analyze stream", data.slice(0, 300));
-        } catch { /* ignore partial */ }
-      }
-    }
-
-    let ai: unknown = null;
-    try { ai = JSON.parse(text); } catch { ai = null; }
-    if (!ai) return json({ error: "Scout couldn't read these photos. You can still fill in the details yourself.", calibration_id: row.id }, 200);
-
-    await admin.from("production_calibrations").update({ ai_characteristics: ai, ai_model: MODEL }).eq("id", row.id);
-    return json({ calibration_id: row.id, ai, photo_urls: signed });
+    if (!sent) return json({ error: "Scout couldn't take these photos right now. Try again in a minute.", calibration_id: row.id }, 502);
+    await admin.from("production_calibrations").update({ webhook_requested_at: new Date().toISOString() }).eq("id", row.id);
+    return json({ calibration_id: row.id, ai: null, webhook_pending: true });
   } catch (e) {
     console.error("calibration-analyze", e);
-    return json({ error: "Something went wrong analyzing the photos." }, 500);
+    return json({ error: "Something went wrong sending the photos to Scout." }, 500);
   }
 });

@@ -289,13 +289,6 @@ export default function ScoutInbox({ embedded = false }: { embedded?: boolean } 
                       >
                         <Pencil className="w-4 h-4 mr-1.5" />Edit estimate
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPostcardCapture(r)}
-                      >
-                        <Send className="w-4 h-4 mr-1.5" />Send Postcard
-                      </Button>
                       {r.bid_request_id ? (
                         <Button
                           size="sm"

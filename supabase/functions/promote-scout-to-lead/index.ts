@@ -263,7 +263,7 @@ Deno.serve(async (req) => {
       ${row("Estimate notes", cap.final_notes || cap.ai_notes)}
       ${row("Submitted", new Date(cap.created_at).toLocaleString("en-US"))}
     </table>
-    <p style="margin:24px 0 0"><a href="https://app.treecheck.ai/dashboard/purchased-leads" style="background:#7a9b4d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:14px;display:inline-block">Open in TreeCheck</a></p>
+    <p style="margin:24px 0 0"><a href="https://app.treecheck.ai/dashboard/purchased" style="background:#7a9b4d;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold;font-size:14px;display:inline-block">Open in TreeCheck</a></p>
   </div>
 </body></html>`;
           await sendEmail(

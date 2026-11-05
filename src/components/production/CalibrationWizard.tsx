@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import {
   seedConfirmed, toJobCharacteristics, verdict, actualPersonHours,
   type AiCharacteristics, type ConfirmedCharacteristics, type CharKey, type ActualJob,
 } from '@/lib/production/calibration';
+import { rangeLabel, WEBHOOK_WAIT_MS, SCOUT_CHOICES, parseScoutNotes, type WebhookReading, type ScoutChoiceKey } from '@/lib/calibrationWebhook';
 import { CHAR_LIMITS, JOB_HOURS_LIMIT, LOADS_LIMIT, firstOutOfRange, inRange } from '@/lib/inputLimits';
 
 async function compress(file: File): Promise<string> {
@@ -24,23 +25,35 @@ async function compress(file: File): Promise<string> {
   return c.toDataURL('image/jpeg', 0.82);
 }
 
-type FieldDef = { key: CharKey; label: string; kind: 'num' | 'bool' | 'enum'; unit?: string; opts?: { v: string; l: string }[] };
+// Same order and wording as Scout's notes. 'scout' fields offer exactly Scout's own answers.
+type FieldDef = { key: CharKey; label: string; kind: 'num' | 'bool' | 'scout'; unit?: string; notFromScout?: boolean };
+const scoutField = (key: ScoutChoiceKey): FieldDef => ({ key, label: SCOUT_CHOICES[key].label, kind: 'scout' });
 const FIELDS: FieldDef[] = [
   { key: 'dbh_inches', label: 'Trunk diameter (DBH)', kind: 'num', unit: 'in' },
   { key: 'height_ft', label: 'Height', kind: 'num', unit: 'ft' },
-  { key: 'access', label: 'Access', kind: 'enum', opts: [{ v: 'easy', l: 'Easy' }, { v: 'moderate', l: 'Moderate' }, { v: 'tight', l: 'Tight' }] },
-  { key: 'drop_zone', label: 'Drop zone', kind: 'enum', opts: [{ v: 'open', l: 'Open' }, { v: 'restricted', l: 'Restricted' }] },
-  { key: 'near_structure', label: 'House/structure close', kind: 'bool' },
-  { key: 'power_lines', label: 'Power lines', kind: 'bool' },
-  { key: 'canopy_dense', label: 'Dense canopy', kind: 'bool' },
-  { key: 'multiple_leaders', label: 'Multiple leaders', kind: 'bool' },
-  { key: 'condition', label: 'Condition', kind: 'enum', opts: [{ v: 'healthy', l: 'Healthy' }, { v: 'declining', l: 'Declining' }, { v: 'dead', l: 'Dead' }] },
-  { key: 'crane_indicated', label: 'Crane needed', kind: 'bool' },
-  { key: 'loads', label: 'Debris loads', kind: 'num' },
+  scoutField('canopy_dense'),
+  scoutField('multiple_leaders'),
+  scoutField('condition'),
+  scoutField('near_structure'),
+  scoutField('access'),
+  scoutField('loads'),
+  scoutField('crane_indicated'),
+  scoutField('drop_zone'),
+  { key: 'power_lines', label: 'Power lines', kind: 'bool', notFromScout: true },
   { key: 'tree_count', label: 'Number of trees', kind: 'num' },
 ];
+type Labels = Partial<Record<CharKey, string | null>>;
+const labelsOf = (ai: AiCharacteristics | null): Labels =>
+  Object.fromEntries(FIELDS.filter((f) => f.kind === 'scout').map((f) => [f.key, ((ai as any)?.[f.key]?.label as string | undefined) ?? null]));
 
 type Step = 'photos' | 'confirm' | 'predicted' | 'actual' | 'compare';
+
+// The unfinished calibration on this device, so closing the window or leaving the page doesn't lose Scout's results.
+const RESUME_KEY = 'tc_calibration_in_progress';
+const rememberCalibration = (id: string | null) => {
+  try { if (id) localStorage.setItem(RESUME_KEY, id); else localStorage.removeItem(RESUME_KEY); } catch { /* storage unavailable */ }
+};
+const rememberedCalibration = (): string | null => { try { return localStorage.getItem(RESUME_KEY); } catch { return null; } };
 
 export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (v: boolean) => void; onSaved?: () => void }) {
   const { data: conf, ownerId } = useProductionConfig();
@@ -55,25 +68,100 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
   const [actual, setActual] = useState<ActualJob>({ method: 'climbing_rigging', crew: [{ roleKey: 'climber', count: 1 }, { roleKey: 'ground', count: 2 }], durationHours: 0, equipment: [], loads: null });
   const [sold, setSold] = useState('');
   const [notes, setNotes] = useState('');
+  // Optional tape measurement, sent the same way a live Scout photo sends it. No address: the server adds a hidden stand-in.
+  const [circ, setCirc] = useState('');
+  // Every detail comes back from the Scout webhook (n8n), usually in about a minute.
+  const [waitingSince, setWaitingSince] = useState<number | null>(null);
+  const [reading, setReading] = useState<WebhookReading | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  // Scout's own answer name for each choice field ("Minimal", "Minor obstructions"), kept with the confirmed details.
+  const [labels, setLabels] = useState<Labels>({});
+  // The tree photos sent to Scout, so the owner can check Scout's results against them.
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!calId || waitingSince == null || reading || timedOut) return;
+    let stop = false;
+    const tick = async () => {
+      const { data } = await (supabase as any).from('production_calibrations').select('webhook_reading, ai_characteristics').eq('id', calId).maybeSingle();
+      if (stop) return;
+      const r = data?.webhook_reading as WebhookReading | null;
+      if (r) {
+        // Read Scout's notes into Scout's own answer choices (works for readings saved before the choices existed too).
+        const stored = (data?.ai_characteristics ?? r.characteristics ?? null) as AiCharacteristics | null;
+        const fromScout = r.notes ? (parseScoutNotes(r.notes) as unknown as AiCharacteristics) : stored;
+        setReading(r); setAi(fromScout); setConfirmed(seedConfirmed(fromScout)); setLabels(labelsOf(fromScout));
+        return;
+      }
+      if (Date.now() - waitingSince > WEBHOOK_WAIT_MS) setTimedOut(true);
+    };
+    const id = window.setInterval(tick, 4000);
+    tick();
+    return () => { stop = true; window.clearInterval(id); };
+  }, [calId, waitingSince, reading, timedOut]);
 
   const reset = () => {
     setStep('photos'); setFiles([]); setHints(''); setCalId(null); setAi(null); setConfirmed(null); setPlan(null);
     setActual({ method: 'climbing_rigging', crew: [{ roleKey: 'climber', count: 1 }, { roleKey: 'ground', count: 2 }], durationHours: 0, equipment: [], loads: null });
-    setSold(''); setNotes('');
+    setSold(''); setNotes(''); setWaitingSince(null); setReading(null); setTimedOut(false);
+    setCirc(''); setLabels({}); setPhotoUrls([]); setViewing(null);
+    rememberCalibration(null);
   };
-  const close = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+  // Closing keeps an unfinished calibration; it starts fresh only once the comparison has been shown.
+  const close = (v: boolean) => { if (!v && step === 'compare') reset(); onOpenChange(v); };
+
+  // Reopening (or coming back to the page or app) picks up the unfinished calibration where the owner left it.
+  useEffect(() => {
+    if (!open || calId) return;
+    const id = rememberedCalibration();
+    if (!id) return;
+    let stop = false;
+    (async () => {
+      const { data } = await (supabase as any).from('production_calibrations')
+        .select('id, status, webhook_reading, ai_characteristics, confirmed_characteristics, predicted_plan, photo_paths').eq('id', id).maybeSingle();
+      if (stop) return;
+      if (!data || data.status === 'completed') { rememberCalibration(null); return; }
+      // Sign the photos before setting the id: setting it re-runs this effect and would drop a later result.
+      const paths = (data.photo_paths ?? []) as string[];
+      const { data: signed } = paths.length ? await supabase.storage.from('scout-media').createSignedUrls(paths, 60 * 60) : { data: [] };
+      if (stop) return;
+      setPhotoUrls((signed ?? []).map((x: any) => x.signedUrl).filter(Boolean) as string[]);
+      setCalId(data.id);
+      const r = data.webhook_reading as WebhookReading | null;
+      const fromScout = r?.notes ? (parseScoutNotes(r.notes) as unknown as AiCharacteristics) : ((data.ai_characteristics ?? null) as AiCharacteristics | null);
+      if (r) { setReading(r); setAi(fromScout); }
+      if (data.status === 'predicted' && data.predicted_plan && data.confirmed_characteristics) {
+        const saved = data.confirmed_characteristics as Record<string, any>;
+        setConfirmed(Object.fromEntries(Object.entries(saved).map(([k, v]) => { const { scoutLabel: _l, ...rest } = v ?? {}; return [k, rest]; })) as ConfirmedCharacteristics);
+        setLabels(Object.fromEntries(Object.entries(saved).filter(([, v]) => v && 'scoutLabel' in v).map(([k, v]) => [k, v.scoutLabel ?? null])));
+        const p = data.predicted_plan as ProductionPlan;
+        setPlan(p); setActual((a) => ({ ...a, method: p.method, loads: p.loads }));
+        setStep('predicted');
+        return;
+      }
+      setStep('confirm');
+      if (r) { setConfirmed(seedConfirmed(fromScout)); setLabels(labelsOf(fromScout)); }
+      else { setTimedOut(false); setWaitingSince(Date.now()); }
+    })();
+    return () => { stop = true; };
+  }, [open, calId]);
 
   const analyze = async () => {
     setBusy(true);
     try {
       const photos = await Promise.all(files.map(compress));
-      const { data, error } = await supabase.functions.invoke('calibration-analyze', { body: { photos, hints: hints || null } });
+      const circumference = Number(circ) > 0 ? Number(circ) : null;
+      const { data, error } = await supabase.functions.invoke('calibration-analyze', {
+        body: { photos, hints: hints || null, circumferenceInches: circumference },
+      });
       if (error && !data) throw error;
-      if (data?.calibration_id) setCalId(data.calibration_id);
+      if (data?.calibration_id) { setCalId(data.calibration_id); rememberCalibration(data.calibration_id); setPhotoUrls(files.map((f) => URL.createObjectURL(f))); }
       if (data?.error) toast.error(data.error);
       if (!data?.calibration_id) return;
-      setAi(data.ai ?? null);
-      setConfirmed(seedConfirmed(data.ai ?? null));
+      if (!data.webhook_pending) return;
+      setAi(null); setConfirmed(null); setReading(null); setTimedOut(false);
+      setWaitingSince(Date.now());
       setStep('confirm');
     } catch (e: any) { toast.error(e?.message || 'Could not analyze photos'); }
     finally { setBusy(false); }
@@ -93,7 +181,8 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
       const inputs = toJobCharacteristics(confirmed);
       const p = buildProductionPlan(inputs);
       const { error } = await (supabase as any).from('production_calibrations').update({
-        confirmed_characteristics: confirmed, inputs, engine_version: ENGINE_VERSION, predicted_plan: p,
+        confirmed_characteristics: Object.fromEntries(Object.entries(confirmed).map(([k, v]) => [k, k in labels ? { ...v, scoutLabel: labels[k as CharKey] ?? null } : v])),
+        inputs, engine_version: ENGINE_VERSION, predicted_plan: p,
         predicted_at: new Date().toISOString(), status: 'predicted',
       }).eq('id', calId);
       if (error) throw error;
@@ -121,6 +210,7 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
         await db.from('production_pricing_history').upsert({ contractor_id: ownerId, calibration_id: calId, sold_price: Number(sold) }, { onConflict: 'calibration_id' });
       }
       setStep('compare');
+      rememberCalibration(null);
       onSaved?.();
     } catch (e: any) { toast.error(e?.message || 'Could not save'); }
     finally { setBusy(false); }
@@ -129,6 +219,11 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
   const roleName = (k: string) => conf?.roles.find((r) => r.role_key === k)?.name ?? k;
   const eqName = (k: string) => conf?.equipment.find((r) => r.equipment_key === k)?.name ?? k;
   const setField = (k: CharKey, value: unknown) => setConfirmed((c) => c && ({ ...c, [k]: { ...c[k], value, source: value == null ? 'unknown' : 'owner' } }));
+  const setScoutChoice = (k: ScoutChoiceKey, label: string) => {
+    const choice = SCOUT_CHOICES[k].choices.find((o) => o.label === label);
+    setLabels((l) => ({ ...l, [k]: choice ? label : null }));
+    setField(k, choice ? choice.value : null);
+  };
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -142,7 +237,7 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
             {step === 'compare' && 'Scout vs. your company'}
           </DialogTitle>
           <DialogDescription>
-            {step === 'photos' && 'Add 1–4 photos of a tree removal you already finished.'}
+            {step === 'photos' && 'Add 1–3 photos of a tree removal you already finished.'}
             {step === 'confirm' && 'Fix anything Scout got wrong. Leave it unknown if you don’t remember.'}
           </DialogDescription>
         </DialogHeader>
@@ -152,7 +247,7 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-sm">
               <Camera className="w-5 h-5 text-primary" />Add photos
               <input type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 4))} />
+                onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 3))} />
             </label>
             {files.length > 0 && (
               <div className="grid grid-cols-4 gap-2">
@@ -164,14 +259,52 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
                 ))}
               </div>
             )}
-            <Textarea placeholder="Anything you remember? (optional) e.g. about 30 inch oak… backyard, tight gate" value={hints} onChange={(e) => setHints(e.target.value)} maxLength={1000} />
-            <Button className="w-full" onClick={analyze} disabled={busy || files.length === 0}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{busy ? 'Scout is looking…' : 'Continue'}</Button>
+            <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+              <div className="font-semibold text-foreground">Make Scout yours</div>
+              <p className="text-muted-foreground">Right out of the box, Scout's AI is accurate for most companies. But you get to fine-tune it to the way <em>you</em> sell.</p>
+              <p className="text-muted-foreground">Scout is self-training. Every time you mark what a job actually sold for, it learns how your company prices work and adjusts itself. So it keeps getting smarter, and your bids keep getting more accurate.</p>
+              <p className="text-muted-foreground">You only do this once, for a few past jobs, as part of setup. After that, Scout keeps comparing its estimates with your actual sale prices and retrains itself on its own.</p>
+            </div>
+            <Button className="w-full" onClick={analyze} disabled={busy || files.length === 0}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{busy ? 'Sending to Scout…' : 'Continue'}</Button>
+          </div>
+        )}
+
+        {step === 'confirm' && !confirmed && (
+          <div className="space-y-3 py-4 text-center">
+            {!timedOut ? (
+              <>
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+                <div className="text-sm font-medium">Scout is reading the tree</div>
+                <div className="text-xs text-muted-foreground">Same Scout as your live estimates. This usually takes about a minute; keep this window open.</div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-medium">Scout is taking longer than usual</div>
+                <Button variant="outline" className="w-full" onClick={() => { setTimedOut(false); setWaitingSince(Date.now()); }}>Keep waiting</Button>
+              </>
+            )}
+            <button type="button" className="w-full text-center text-xs underline text-muted-foreground" onClick={() => { setTimedOut(true); setWaitingSince(null); setConfirmed(seedConfirmed(null)); }}>Skip Scout and fill in the details myself</button>
           </div>
         )}
 
         {step === 'confirm' && confirmed && (
           <div className="space-y-2">
-            {!ai && <div className="rounded-md bg-muted p-2 text-xs">Scout couldn't read the photos, so fill in what you know.</div>}
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">One-time setup.</span> You only do this for a few past jobs while you set up. From then on, Scout keeps comparing its estimates with what your jobs actually sold for and retrains itself, getting more accurate on its own.
+            </div>
+            {photoUrls.length > 0 && (
+              <div>
+                <div className="text-[11px] text-muted-foreground mb-1">Tap a photo to check Scout's results</div>
+                <div className="flex gap-2">
+                  {photoUrls.map((u, i) => (
+                    <button key={u} type="button" onClick={() => setViewing(u)} className="h-20 w-20 overflow-hidden rounded-md border bg-muted" aria-label={`View tree photo ${i + 1}`}>
+                      <img src={u} alt={`Tree photo ${i + 1}`} className="h-full w-full object-contain" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!reading && <div className="rounded-md bg-muted p-2 text-xs">Scout's answer isn't here, so fill in what you know.</div>}
             {FIELDS.map((f) => {
               const c = confirmed[f.key];
               return (
@@ -179,8 +312,11 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{f.label}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {c.source === 'owner' ? 'You set this' : c.source === 'ai' ? `Scout · ${c.aiConfidence} confidence` : 'Unknown'}
+                      {c.source === 'owner' ? 'You set this' : c.source === 'ai' ? `Scout · ${c.aiConfidence} confidence` : f.notFromScout ? "Scout doesn't report this. Set it if you know." : 'Unknown'}
                     </div>
+                    {(f.key === 'dbh_inches' || f.key === 'height_ft') && rangeLabel(reading?.[f.key], f.unit ?? '') && (
+                      <div className="text-[11px] text-muted-foreground">Scout's estimate: {rangeLabel(reading?.[f.key], f.unit ?? '')}</div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {f.kind === 'num' && (
@@ -195,10 +331,11 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
                         <option value="">Unknown</option><option value="true">Yes</option><option value="false">No</option>
                       </select>
                     )}
-                    {f.kind === 'enum' && (
-                      <select className="h-8 rounded-md border bg-background px-2 text-sm" value={c.value == null ? '' : String(c.value)}
-                        onChange={(e) => setField(f.key, e.target.value || null)}>
-                        <option value="">Unknown</option>{f.opts!.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                    {f.kind === 'scout' && (
+                      <select className="h-8 max-w-[11rem] truncate rounded-md border bg-background px-2 text-sm" value={c.value == null ? '' : (labels[f.key] ?? '')}
+                        onChange={(e) => setScoutChoice(f.key as ScoutChoiceKey, e.target.value)}>
+                        <option value="">Unknown</option>
+                        {SCOUT_CHOICES[f.key as ScoutChoiceKey].choices.map((o) => <option key={o.label} value={o.label}>{o.label}</option>)}
                       </select>
                     )}
                   </div>
@@ -208,6 +345,9 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
             {ai?.observations?.length ? (
               <div className="text-xs text-muted-foreground"><div className="font-semibold text-foreground">Scout noticed</div><ul className="list-disc pl-5">{ai.observations.map((o) => <li key={o}>{o}</li>)}</ul></div>
             ) : null}
+            {reading?.notes && (
+              <details className="text-xs text-muted-foreground"><summary className="cursor-pointer font-semibold text-foreground">Scout's full notes</summary><p className="mt-1 whitespace-pre-wrap">{reading.notes}</p></details>
+            )}
             <Button className="w-full" onClick={lockPrediction} disabled={busy}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Looks right — show Scout's plan</Button>
           </div>
         )}
@@ -304,6 +444,18 @@ export function CalibrationWizard({ open, onOpenChange, onSaved }: { open: boole
               <Button className="flex-1" variant="outline" onClick={() => close(false)}>Finish for now</Button>
             </div>
           </div>
+        )}
+        {viewing && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/95 p-4" onClick={() => setViewing(null)} role="dialog" aria-label="Tree photo">
+            <img src={viewing} alt="Tree photo" className="max-h-full max-w-full object-contain" />
+            <button type="button" className="absolute right-3 top-3 rounded-full border bg-background p-2" onClick={() => setViewing(null)} aria-label="Close photo"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+        {step !== 'photos' && step !== 'compare' && (
+          <button type="button" className="w-full pt-2 text-center text-xs underline text-muted-foreground"
+            onClick={() => { if (window.confirm('Start over with a different job? This one will be set aside.')) reset(); }}>
+            Start over with a different job
+          </button>
         )}
       </DialogContent>
     </Dialog>

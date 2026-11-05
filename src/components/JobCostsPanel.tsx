@@ -5,25 +5,35 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Loader2, Save } from 'lucide-react';
-import { emptyPricingInputs, type StoredPricingInputs } from '@/lib/bidPricingInputs';
+import { emptyPricingInputs, withOwnerRates, type OwnerRateDefaults, type StoredPricingInputs } from '@/lib/bidPricingInputs';
+
+/** Rates that follow Settings unless typed on this job. */
+const RATE_KEYS = ['laborRate', 'disposalRate', 'miniSkidRate', 'miniSkidPerDay'] as const;
 
 interface Props {
   value: StoredPricingInputs | null | undefined;
   onSave: (next: StoredPricingInputs) => Promise<void> | void;
+  /** The owner's Settings rates, shown and used wherever this job has no rate of its own. */
+  ownerRates?: OwnerRateDefaults | null;
 }
 
 const numOrNull = (v: string) => (v === '' ? null : Number(v));
 
 /** Owner-only editor for the job costs that feed the price calculator. */
-export function JobCostsPanel({ value, onSave }: Props) {
-  const [form, setForm] = useState<StoredPricingInputs>({ ...emptyPricingInputs(), ...(value ?? {}) });
+export function JobCostsPanel({ value, onSave, ownerRates }: Props) {
+  const shown = () => {
+    const base = { ...emptyPricingInputs(), laborRate: null, disposalRate: null, ...(value ?? {}) } as StoredPricingInputs;
+    return { ...emptyPricingInputs(), ...withOwnerRates(base, ownerRates) } as StoredPricingInputs;
+  };
+  const [form, setForm] = useState<StoredPricingInputs>(shown);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    setForm({ ...emptyPricingInputs(), ...(value ?? {}) });
+    setForm(shown());
     setDirty(false);
-  }, [value]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, ownerRates]);
 
   const set = (patch: Partial<StoredPricingInputs>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -33,7 +43,14 @@ export function JobCostsPanel({ value, onSave }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      await onSave(form);
+      // Keep a Settings rate linked to Settings unless it was changed on this job.
+      const initial = shown();
+      const next: StoredPricingInputs = { ...form };
+      for (const k of RATE_KEYS) {
+        const own = (value ?? {})[k];
+        if ((own === null || own === undefined) && next[k] === initial[k]) delete next[k];
+      }
+      await onSave(next);
       setDirty(false);
     } finally {
       setSaving(false);

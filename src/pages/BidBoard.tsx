@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import ScoutInbox from '@/pages/ScoutInbox';
+import { ExplainerVideo } from '@/components/ExplainerVideo';
 import { supabase } from '@/integrations/supabase/client';
 import {
   useBidRequests, useBidsForRequests, useCrewNetwork, useJobDispatches, fetchBidPhotoUrl, prefetchBidPhotos,
@@ -9,7 +10,8 @@ import {
 } from '@/hooks/useCrew';
 import { calculatePricing, money } from '@/lib/bidPricing';
 import { climberPayFromQuote } from '@/lib/payroll';
-import { toPricingInput, withBidExtras, type StoredPricingInputs } from '@/lib/bidPricingInputs';
+import { toPricingInput, withBidExtras, withOwnerRates, type StoredPricingInputs } from '@/lib/bidPricingInputs';
+import { useScoutRates } from '@/hooks/useScoutRates';
 import { JobCostsPanel } from '@/components/JobCostsPanel';
 import { BidPriceCard, aiMidpoint, aiRangeText, quoteOptionLabel, type QuoteOption } from '@/components/BidPriceCard';
 import { useProfile } from '@/hooks/useProfile';
@@ -59,6 +61,9 @@ const CLOSED_STATUSES = new Set(['job_complete', 'quote_declined', 'no_longer_ne
 
 export default function BidBoard() {
   const qc = useQueryClient();
+  // Settings rates (labor, dump fee, mini skid) feed every job that has no rate typed on it.
+  const { rates: settingsRates, exists: hasSettingsRates } = useScoutRates();
+  const ownerRates = hasSettingsRates ? settingsRates : null;
   const { user } = useAuth();
   // Large-company setup: once the company publishes its crew rates, its own crews' work sits beside the sub jobs.
   const { status: production } = useProductionStatus();
@@ -481,6 +486,7 @@ export default function BidBoard() {
           <p className="text-sm text-muted-foreground mt-1">
             Sealed offers from your crew, with the quote to send and what you keep on every option.
           </p>
+          <ExplainerVideo video="jobs" className="mt-1.5" />
         </div>
         <div className="flex flex-wrap gap-2">
           {production.published && <Button asChild variant="outline"><Link to="/dashboard/bid-board/crew">Crew work</Link></Button>}
@@ -976,6 +982,7 @@ export default function BidBoard() {
                     <JobCostsPanel
                       value={(r.pricing_inputs ?? null) as StoredPricingInputs | null}
                       onSave={(next) => savePricing(r, next)}
+                      ownerRates={ownerRates}
                     />
 
                     <OfficeNotes
@@ -1069,7 +1076,7 @@ export default function BidBoard() {
                           <div className={gi === 1 ? 'space-y-3 p-2' : 'space-y-3'}>
                         {group
                           .map((b, idx) => {
-                            const storedIn = (r.pricing_inputs ?? {}) as StoredPricingInputs;
+                            const storedIn = withOwnerRates((r.pricing_inputs ?? {}) as StoredPricingInputs, ownerRates);
                             const eqLabels: string[] = [];
                             const pretty = (key: string) => (
                               { crane: 'Crane', chipper: 'Chipper', mini_skid: 'Mini skid', saws: 'Own saws', truck_trailer: 'Truck + trailer' }[key] ?? key.replace('_', ' ')
@@ -1148,7 +1155,7 @@ export default function BidBoard() {
                                     <>{(b as any).est_disposal_loads} disposal load{(b as any).est_disposal_loads === 1 ? '' : 's'} · </>
                                   )}
                                   {(b as any).needs_mini_skid === true && (
-                                    <>mini skid {(b as any).mini_skid_hours ?? b.est_hours ?? '?'} hr (+${(Number((b as any).mini_skid_hours ?? b.est_hours) || 0) * (Number(storedIn.miniSkidRate) || 100)}) · </>
+                                    <>mini skid {(b as any).mini_skid_hours ?? b.est_hours ?? '?'} hr (+${(() => { const h = Number((b as any).mini_skid_hours ?? b.est_hours) || 0; const rate = Number(storedIn.miniSkidRate) || 100; return storedIn.miniSkidPerDay ? Math.max(1, Math.ceil(h / 8)) * rate : h * rate; })()}) · </>
                                   )}
                                   {(b as any).needs_mini_skid === false && <>no mini skid · </>}
                                   {b.equipment ? `Equipment they bring: ${b.equipment}` : 'no equipment listed'}

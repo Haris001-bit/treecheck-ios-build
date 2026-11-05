@@ -67,7 +67,7 @@ export type WindowKey = (typeof WINDOW_KEYS)[number];
  * it (P14), and the 7 days before L7 (P7). Optional: without them a period shows no data, and the
  * status does not change.
  */
-export const PERIOD_WINDOW_KEYS = ["L14", "P14", "P7"] as const;
+export const PERIOD_WINDOW_KEYS = ["L14", "P14", "P7", "L1", "P1"] as const;
 export type PeriodWindowKey = (typeof PERIOD_WINDOW_KEYS)[number];
 
 /**
@@ -220,6 +220,9 @@ export function periodWindowsFor(today: string): Array<WindowSpec & { key: Perio
     { key: "L14", from: addDays(today, -13), to: today },
     { key: "P14", from: addDays(today, -27), to: addDays(today, -14) },
     { key: "P7", from: addDays(today, -13), to: addDays(today, -7) },
+    // engine-8: yesterday (a full day) and the day before it.
+    { key: "L1", from: addDays(today, -1), to: addDays(today, -1) },
+    { key: "P1", from: addDays(today, -2), to: addDays(today, -2) },
   ];
 }
 

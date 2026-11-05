@@ -27,15 +27,16 @@ import { GiveawayBanner } from '@/components/giveaway/GiveawayBanner';
 import { StoreCatalog } from '@/components/StoreCatalog';
 import { GiveawayRulesLink } from '@/components/giveaway/GiveawayRulesLink';
 import { giveawayOpen } from '@/lib/giveaway';
+import { ExplainerVideo } from '@/components/ExplainerVideo';
 
 /** Free is offered only to Oklahoma companies; the server checks the real state on the map before creating the account. */
 const looksLikeOklahoma = (state: string) => /^(ok|okla|oklahoma)\.?$/i.test(state.trim());
 
 const OUTCOMES = [
-  { icon: ClipboardList, title: 'Run the business.', text: 'Keep jobs, crews, subcontractors, and schedules organized.', names: 'Jobs · Subs' },
-  { icon: Camera, title: 'Price the work.', text: 'Estimate from tree photos using AI that adapts to how your company prices jobs.', names: 'Scout' },
-  { icon: LineChart, title: 'Know where your money stands.', text: "See whether this month is profitable and whether you're on track for payroll.", names: 'Pulse' },
-  { icon: Megaphone, title: "Turn today's job into tomorrow's lead.", text: 'Turn job photos and a voice memo into content for your website.', names: 'Digital Marketing Agent' },
+  { icon: ClipboardList, title: 'Run the business.', text: 'Keep jobs, crews, subcontractors, and schedules organized.', names: 'Jobs · Subs', video: 'jobs' as const },
+  { icon: Camera, title: 'Price the work.', text: 'Estimate from tree photos using AI that adapts to how your company prices jobs.', names: 'Scout', video: 'scout' as const },
+  { icon: LineChart, title: 'Know where your money stands.', text: "See whether this month is profitable and whether you're on track for payroll.", names: 'Pulse', video: undefined },
+  { icon: Megaphone, title: "Turn today's job into tomorrow's lead.", text: 'Turn job photos and a voice memo into content for your website.', names: 'Digital Marketing Agent', video: 'dma' as const },
 ];
 
 export default function StartTrial() {
@@ -255,12 +256,13 @@ function StartTrialForm() {
             <section aria-labelledby="outcomes-heading">
               <h2 id="outcomes-heading" className="text-2xl font-bold text-center mb-8">What TreeCheck does for your company</h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                {OUTCOMES.map(({ icon: Icon, title, text, names }) => (
+                {OUTCOMES.map(({ icon: Icon, title, text, names, video }) => (
                   <div key={title} className="rounded-xl border border-border bg-card p-5 sm:p-6">
                     <Icon className="h-6 w-6 text-primary mb-3" aria-hidden />
                     <h3 className="text-lg font-bold">{title}</h3>
                     <p className="mt-1 text-muted-foreground">{text}</p>
                     <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-primary">{names}</p>
+                    {video && <ExplainerVideo video={video} className="mt-3" />}
                   </div>
                 ))}
               </div>
@@ -420,7 +422,7 @@ function StartTrialForm() {
                   ) : (
                     <>
                       <p className="text-lg"><span className="font-semibold">After your trial:</span> $50/month</p>
-                      <p className="text-sm text-muted-foreground">Cancel before day 15 and you won't be charged. DMA, postcards, and the lead marketplace are not included on the demo plan. Additional office teammates are $35/month each.</p>
+                      <p className="text-sm text-muted-foreground">Cancel before day 15 and you won't be charged. DMA and the lead marketplace are not included on the demo plan. Additional office teammates are $35/month each.</p>
                     </>
                   )}
                 </>

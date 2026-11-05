@@ -79,19 +79,6 @@ export function DMAComposerDialog({ open, onOpenChange, customerName }: Props) {
                 </Button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setPostcardTeaserOpen(true)}
-                className="w-full rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4 text-left transition hover:bg-primary/10"
-              >
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  📬 Want to send postcards to {firstName}'s neighbors?
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  We'll turn this story into a postcard and mail it to 50 nearby homes.
-                </div>
-              </button>
             </div>
           )}
         />
